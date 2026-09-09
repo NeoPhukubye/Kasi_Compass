@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kasi Compass — Train Journey Mapper</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Kasi Compass</h1>
+            <p class="tagline">Every stop tells a story.</p>
+        </header>
+
+        <nav id="mode-switcher">
+            <button id="btn-explorer" class="active">Explorer Mode</button>
+            <button id="btn-companion">Companion Mode</button>
+        </nav>
+
+        <main>
+            <div id="map-container">
+                <div id="map"></div>
+                <div id="story-card" class="hidden">
+                    <button id="close-story">&times;</button>
+                    <h2 id="story-title"></h2>
+                    <p id="story-text"></p>
+                    <p id="story-source"></p>
+                </div>
+            </div>
+
+            <div id="controls">
+                <div id="explorer-controls">
+                    <button id="btn-start-journey">Start Journey</button>
+                    <button id="btn-pause-journey" disabled>Pause</button>
+                    <div class="speed-control">
+                        <label for="speed-slider">Speed:</label>
+                        <input type="range" id="speed-slider" min="1" max="10" value="3">
+                        <span id="speed-value">3x</span>
+                    </div>
+                </div>
+                <div id="companion-controls" class="hidden">
+                    <button id="btn-gps">Start GPS Tracking</button>
+                    <p id="gps-status">GPS inactive</p>
+                </div>
+            </div>
+
+            <div id="journey-progress">
+                <div class="progress-bar">
+                    <div id="progress-fill"></div>
+                </div>
+                <p id="progress-text">Ready to begin</p>
+            </div>
+        </main>
+
+        <footer>
+            <p>Team NeoDev — Geekulcha Annual Hackathon 2026</p>
+        </footer>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
