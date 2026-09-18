@@ -1,4 +1,8 @@
+# Runtime (backend service)
 fastapi>=0.100.0
-uvicorn>=0.23.0
+uvicorn[standard]>=0.23.0
 pydantic>=2.0.0
+# Test-only (httpx backs fastapi.testclient.TestClient)
+# keep the runtime lean on Render: `pip install -r requirements-dev.txt` for tests
 pytest>=7.0.0
+httpx>=0.24.0

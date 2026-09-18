@@ -40,6 +40,15 @@ class StoryTrigger:
     distance_meters: float
 
 
+def nearest_waypoint(current_lat: float, current_lon: float) -> Waypoint:
+    """Return the waypoint on the route closest to the given position."""
+    return min(
+        PRETORIA_TO_CAPE_TOWN,
+        key=lambda w: haversine_meters(current_lat, current_lon, w.latitude, w.longitude),
+    )
+
+
+
 def find_triggered_waypoint(
     current_lat: float,
     current_lon: float,
@@ -93,9 +102,6 @@ def route_progress_fraction(current_lat: float, current_lon: float) -> float:
     distance) — sufficient for an animated map at MVP fidelity, not for
     precision navigation.
     """
-    nearest = min(
-        PRETORIA_TO_CAPE_TOWN,
-        key=lambda w: haversine_meters(current_lat, current_lon, w.latitude, w.longitude),
-    )
+    nearest = nearest_waypoint(current_lat, current_lon)
     idx = PRETORIA_TO_CAPE_TOWN.index(nearest)
     return idx / (len(PRETORIA_TO_CAPE_TOWN) - 1)

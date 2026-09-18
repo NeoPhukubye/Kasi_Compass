@@ -69,6 +69,11 @@ async function loadRoute() {
 }
 
 function startExplorerJourney() {
+    if (explorerInterval) {
+        clearInterval(explorerInterval);
+        explorerInterval = null;
+    }
+
     resetJourney();
     els.btnStart.disabled = true;
     els.btnPause.disabled = false;
@@ -92,6 +97,11 @@ function startExplorerJourney() {
 }
 
 function pauseExplorerJourney() {
+    if (explorerInterval) {
+        clearInterval(explorerInterval);
+        explorerInterval = null;
+    }
+
     if (isAnimating) {
         stopAnimation();
         els.btnStart.disabled = false;
@@ -114,11 +124,11 @@ async function toggleCompanionMode() {
 
     if (!navigator.geolocation) {
         els.gpsStatus.textContent = 'Geolocation not supported';
+        els.btnGps.textContent = 'Start GPS Tracking';
         return;
     }
 
     els.gpsStatus.textContent = 'Requesting GPS...';
-    els.btnGps.textContent = 'Stop GPS';
 
     try {
         companionWatchId = navigator.geolocation.watchPosition(
@@ -152,6 +162,7 @@ async function toggleCompanionMode() {
                 maximumAge: 0,
             }
         );
+        els.btnGps.textContent = 'Stop GPS';
     } catch (err) {
         els.gpsStatus.textContent = `GPS error: ${err.message}`;
         stopCompanionMode();
@@ -165,32 +176,45 @@ function stopCompanionMode() {
     }
     els.btnGps.textContent = 'Start GPS Tracking';
     els.gpsStatus.textContent = 'GPS inactive';
+
+    // Leaving Companion Mode should not strand the progress bar on whatever
+    // fraction the last GPS fix happened to report — reset it to the idle
+    // "Ready to begin" state so both modes start from a clean slate.
+    updateProgressUI(0);
 }
 
+// Uses the single shared haversine implementation in js/geo.js (loaded before
+// this file in index.html). This is only a client-side approximation for
+// animating the train icon and showing "approaching X" hints — the backend
+// (app/story_engine/geofence.py) remains the single source of truth for which
+// waypoint actually triggers a story.
 function getNearestWaypoint(lat, lon) {
     if (!waypoints.length) return null;
+    if (typeof haversineMeters !== 'function') {
+        console.error('geo.js (haversineMeters) not loaded — check script order in index.html');
+        return null;
+    }
+    if (waypoints.length < 2) {
+        return { ...waypoints[0], progress: 0 };
+    }
+
     let nearest = null;
     let minDist = Infinity;
-    for (const w of waypoints) {
+    let nearestIndex = 0;
+
+    // Use the array index directly rather than waypoints.indexOf(w) inside the
+    // loop, which was O(n^2) and relied on object identity.
+    waypoints.forEach((w, index) => {
         const d = haversineMeters(lat, lon, w.lat, w.lon);
         if (d < minDist) {
             minDist = d;
-            const idx = waypoints.indexOf(w);
-            nearest = { ...w, progress: idx / (waypoints.length - 1) };
+            nearest = w;
+            nearestIndex = index;
         }
-    }
-    return nearest;
-}
+    });
 
-function haversineMeters(lat1, lon1, lat2, lon2) {
-    const R = 6371000;
-    const toRad = x => x * Math.PI / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat / 2) ** 2 +
-              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-              Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.asin(Math.sqrt(a));
+    if (!nearest) return null;
+    return { ...nearest, progress: nearestIndex / (waypoints.length - 1) };
 }
 
 function onProgressUpdate(progress) {
@@ -214,8 +238,11 @@ function updateProgressUI(progress) {
 }
 
 function getCurrentWaypoint(progress) {
-    if (!waypoints.length) return null;
-    const idx = Math.round(progress * (waypoints.length - 1));
+    // Guard before dividing by (waypoints.length - 1): with a single waypoint
+    // that divisor is 0, which yields NaN/Infinity and an out-of-range index.
+    if (waypoints.length < 2) return null;
+    const safeProgress = Math.max(0, Math.min(1, progress || 0));
+    const idx = Math.round(safeProgress * (waypoints.length - 1));
     return waypoints[Math.min(idx, waypoints.length - 1)];
 }
 
@@ -231,8 +258,16 @@ function onJourneyComplete() {
 
 function onWaypointClick(waypoint) {
     const idx = waypoints.indexOf(waypoint);
-    const progress = idx / (waypoints.length - 1);
-    setProgress(progress);
+    if (idx === -1) return;
+
+    // Same single-waypoint guard as getCurrentWaypoint: never divide by
+    // (waypoints.length - 1) when there is only one waypoint.
+    if (waypoints.length < 2) {
+        setProgress(0);
+        return;
+    }
+
+    setProgress(idx / (waypoints.length - 1));
 }
 
 function showStoryCard(data) {

@@ -35,6 +35,17 @@ class JourneyPositionResponse(BaseModel):
     story_source: str | None = None
 
 
+def _validate_coordinates(lat: float, lon: float) -> None:
+    """Reject coordinates that cannot be a real geographic position.
+
+    Without this, a client sending lat=9999 would silently receive a
+    "no trigger" response rather than a clear error.
+    """
+    if not -90.0 <= lat <= 90.0:
+        raise HTTPException(status_code=422, detail=f"lat must be between -90 and 90, got {lat}")
+    if not -180.0 <= lon <= 180.0:
+        raise HTTPException(status_code=422, detail=f"lon must be between -180 and 180, got {lon}")
+
 @app.get("/journey/position", response_model=JourneyPositionResponse)
 def journey_position(lat: float, lon: float, language: str = "en") -> JourneyPositionResponse:
     """
@@ -42,6 +53,8 @@ def journey_position(lat: float, lon: float, language: str = "en") -> JourneyPos
     simulated position scrubbed along the route in Explorer Mode), return
     whichever waypoint's story should be showing right now.
     """
+    _validate_coordinates(lat, lon)
+
     trigger = find_triggered_waypoint(lat, lon)
     progress = route_progress_fraction(lat, lon)
 
