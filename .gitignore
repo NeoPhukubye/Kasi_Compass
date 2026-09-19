@@ -11,5 +11,6 @@ node_modules/
 .DS_Store
 *.swp
 *.swo
+frontend/js/config.js
 # Generated translation drafts awaiting human review (backend/tools/translate_stories.py)
 backend/tools/translation_drafts/
