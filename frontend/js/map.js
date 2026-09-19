@@ -37,6 +37,9 @@ function initMap() {
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    setTimeout(() => map.resize(), 200);
+    window.addEventListener('resize', () => { if (map) map.resize(); });
 }
 
 function setRoute(routeData) {
@@ -44,41 +47,95 @@ function setRoute(routeData) {
     const coordinates = waypoints.map(w => [w.lon, w.lat]);
 
     routeGeoJSON = {
-        type: 'Feature',
+        type: "Feature",
         properties: {},
         geometry: {
-            type: 'LineString',
+            type: "LineString",
             coordinates: coordinates,
         },
     };
 
-    if (map.getSource('route')) {
-        map.getSource('route').setData(routeGeoJSON);
+    if (map.getSource('route-traveled')) {
+        map.getSource('route-traveled').setData({
+            type: "FeatureCollection",
+            features: [{
+                type: "Feature",
+                geometry: {
+                    type: "LineString",
+                    coordinates: [...coordinates],
+                },
+            }],
+        });
     } else {
-        map.addSource('route', {
-            type: 'geojson',
-            data: routeGeoJSON,
+        map.addSource('route-traveled', {
+            type: "geojson",
+            data: {
+                type: "FeatureCollection",
+                features: [{
+                    type: "Feature",
+                    geometry: {
+                        type: "LineString",
+                        coordinates: [...coordinates],
+                    },
+                }],
+            },
         });
 
         map.addLayer({
-            id: 'route-line',
+            id: 'route-traveled',
             type: 'line',
-            source: 'route',
+            source: 'route-traveled',
             paint: {
                 'line-color': '#d4af37',
-                'line-width': 4,
-                'line-opacity': 0.8,
+                'line-width': 6,
+                'line-opacity': 1,
+            },
+        });
+    }
+
+    if (map.getSource('route-remaining')) {
+        map.getSource('route-remaining').setData({
+            type: "FeatureCollection",
+            features: [{
+                type: "Feature",
+                geometry: {
+                    type: "LineString",
+                    coordinates: [...coordinates],
+                },
+            }],
+        });
+    } else {
+        map.addSource('route-remaining', {
+            type: "geojson",
+            data: {
+                type: "FeatureCollection",
+                features: [{
+                    type: "Feature",
+                    geometry: {
+                        type: "LineString",
+                        coordinates: [...coordinates],
+                    },
+                }],
+            },
+        });
+
+        map.addLayer({
+            id: 'route-remaining',
+            type: 'line',
+            source: 'route-remaining',
+            paint: {
+                'line-color': '#d4af37',
+                'line-width': 6,
+                'line-opacity': 0.2,
             },
         });
     }
 
     waypoints.forEach((w, index) => {
         const el = document.createElement('div');
-        el.className = 'waypoint-marker';
-        el.innerHTML = `<span>${index + 1}</span>`;
         el.style.cssText = `
-            width: 28px;
-            height: 28px;
+            width: 32px;
+            height: 32px;
             background: #1a472a;
             color: white;
             border-radius: 50%;
@@ -86,10 +143,12 @@ function setRoute(routeData) {
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 13px;
             border: 3px solid #d4af37;
             cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         `;
+        el.innerHTML = `${index + 1}`;
 
         el.addEventListener('click', () => {
             if (typeof onWaypointClick === 'function') {
@@ -97,7 +156,7 @@ function setRoute(routeData) {
             }
         });
 
-        new maplibregl.Marker({ element: el })
+        new maplibregl.Marker({ element: el, anchor: 'center' })
             .setLngLat([w.lon, w.lat])
             .addTo(map);
     });
@@ -129,17 +188,69 @@ function updateTrainPosition(progressFraction) {
 
     if (!trainMarker) {
         const el = document.createElement('div');
-        el.innerHTML = '🚂';
         el.style.cssText = `
-            font-size: 28px;
-            transform: translate(-50%, -50%);
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #1a472a;
+            border: 4px solid #d4af37;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            animation: pulse-marker 2s ease-in-out infinite;
         `;
+        el.innerHTML = '🚂';
         trainMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
             .setLngLat([pos.lon, pos.lat])
             .addTo(map);
     } else {
         trainMarker.setLngLat([pos.lon, pos.lat]);
+    }
+
+    if (routeGeoJSON && progressFraction > 0) {
+        const coords = routeGeoJSON.geometry.coordinates;
+        const totalSegments = coords.length - 1;
+        const exactIndex = progressFraction * totalSegments;
+        const cutIndex = Math.floor(exactIndex);
+
+        const traveledCoords = coords.slice(0, cutIndex + 1);
+        traveledCoords.push([coords[cutIndex][0] + (coords[Math.min(cutIndex + 1, totalSegments)][0] - coords[cutIndex][0]) * (exactIndex - cutIndex), coords[cutIndex][1] + (coords[Math.min(cutIndex + 1, totalSegments)][1] - coords[cutIndex][1]) * (exactIndex - cutIndex)]);
+
+        const remainingCoords = coords.slice(cutIndex);
+
+        if (map.getSource('route-traveled')) {
+            map.getSource('route-traveled').setData({
+                type: "FeatureCollection",
+                features: [{
+                    type: "Feature",
+                    geometry: {
+                        type: "LineString",
+                        coordinates: traveledCoords,
+                    },
+                }],
+            });
+        }
+
+        if (map.getSource('route-remaining')) {
+            map.getSource('route-remaining').setData({
+                type: "FeatureCollection",
+                features: [{
+                    type: "Feature",
+                    geometry: {
+                        type: "LineString",
+                        coordinates: remainingCoords,
+                    },
+                }],
+            });
+        }
+
+        map.easeTo({
+            center: [pos.lon, pos.lat],
+            zoom: Math.max(map.getZoom(), 5.5),
+            duration: 300,
+        });
     }
 }
 
