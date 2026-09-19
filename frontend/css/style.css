@@ -354,6 +354,32 @@ button:disabled {
     color: var(--text-light);
 }
 
+#share-position-control {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+#share-position-control label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.share-hint {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin: 0;
+}
+
+#share-status {
+    font-size: 0.9rem;
+    color: var(--text-light);
+}
+
 #journey-progress {
     background: var(--white);
     padding: 1rem;

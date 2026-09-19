@@ -313,3 +313,54 @@ function resetJourney() {
         onProgressUpdate(0);
     }
 }
+
+// --- Other riders' shared positions -----------------------------------
+// Kept as a Map(riderId -> maplibregl.Marker) so existing markers are
+// moved rather than destroyed and recreated on every poll, matching how
+// the train marker itself is handled in updateTrainPosition.
+const otherRiderMarkers = new Map();
+
+function renderOtherRiders(positions) {
+    const seenIds = new Set();
+
+    positions.forEach((p) => {
+        seenIds.add(p.rider_id);
+
+        if (otherRiderMarkers.has(p.rider_id)) {
+            otherRiderMarkers.get(p.rider_id).setLngLat([p.lon, p.lat]);
+            return;
+        }
+
+        const el = document.createElement('div');
+        el.style.cssText = `
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #6ea8ff;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+        `;
+        el.title = 'Fellow rider';
+
+        const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([p.lon, p.lat])
+            .addTo(map);
+        otherRiderMarkers.set(p.rider_id, marker);
+    });
+
+    // Remove markers for riders who dropped out of the shared-positions
+    // response (left, went stale past the backend's TTL, etc.).
+    for (const [riderId, marker] of otherRiderMarkers) {
+        if (!seenIds.has(riderId)) {
+            marker.remove();
+            otherRiderMarkers.delete(riderId);
+        }
+    }
+}
+
+function clearOtherRiders() {
+    for (const marker of otherRiderMarkers.values()) {
+        marker.remove();
+    }
+    otherRiderMarkers.clear();
+}

@@ -84,3 +84,65 @@ def test_route_progress_fraction_present_on_every_response():
     )
     body = response.json()
     assert body["route_progress_fraction"] == 0.0
+
+
+# ---------------------------------------------------------------------
+# Live position sharing — end-to-end through the actual API, not just
+# the store in isolation (see test_live_share.py for that).
+# ---------------------------------------------------------------------
+
+RIDER_A = "11111111-2222-3333-4444-555555555555"
+RIDER_B = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+
+def test_share_position_end_to_end_then_visible_to_other_rider():
+    de_aar = get_waypoint("de_aar")
+    share = client.post(
+        "/journey/share-position",
+        json={"rider_id": RIDER_A, "lat": de_aar.latitude, "lon": de_aar.longitude},
+    )
+    assert share.status_code == 200
+    assert share.json()["active_riders"] >= 1
+
+    seen_by_b = client.get("/journey/shared-positions", params={"rider_id": RIDER_B})
+    assert seen_by_b.status_code == 200
+    rider_ids = [p["rider_id"] for p in seen_by_b.json()]
+    assert RIDER_A in rider_ids
+
+    # A rider never sees their own position in the "other riders" list.
+    seen_by_a = client.get("/journey/shared-positions", params={"rider_id": RIDER_A})
+    rider_ids_for_a = [p["rider_id"] for p in seen_by_a.json()]
+    assert RIDER_A not in rider_ids_for_a
+
+
+def test_share_position_rejects_non_uuid_rider_id():
+    response = client.post(
+        "/journey/share-position",
+        json={"rider_id": "not-a-uuid", "lat": -30.0, "lon": 24.0},
+    )
+    assert response.status_code == 422
+
+
+def test_share_position_rejects_invalid_coordinates():
+    response = client.post(
+        "/journey/share-position",
+        json={"rider_id": RIDER_A, "lat": 999.0, "lon": 24.0},
+    )
+    assert response.status_code == 422
+
+
+def test_leave_endpoint_removes_rider_from_shared_positions():
+    de_aar = get_waypoint("de_aar")
+    client.post(
+        "/journey/share-position",
+        json={"rider_id": RIDER_A, "lat": de_aar.latitude, "lon": de_aar.longitude},
+    )
+    leave = client.post(
+        "/journey/share-position/leave",
+        json={"rider_id": RIDER_A, "lat": 0.0, "lon": 0.0},
+    )
+    assert leave.status_code == 204
+
+    seen_by_b = client.get("/journey/shared-positions", params={"rider_id": RIDER_B})
+    rider_ids = [p["rider_id"] for p in seen_by_b.json()]
+    assert RIDER_A not in rider_ids

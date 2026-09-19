@@ -24,7 +24,17 @@ Nothing digital currently tells the story of the towns strung along this corrido
 Two modes:
 
 - **Explorer Mode** — anyone "rides" the journey virtually on an animated map, previewing every stop's story before ever buying a ticket. Works standalone today, independent of any train operator.
-- **Companion Mode** — for riders actually on a train on this corridor, GPS-based geofencing auto-unlocks each stop's story as the train physically passes that point.
+- **Companion Mode** — for riders actually on a train on this corridor, GPS-based geofencing auto-unlocks each stop's story as the train physically passes that point. Riders can optionally opt in to sharing their live (fuzzed, anonymous) position, so others in Companion Mode see fellow riders moving along the route — see "Live position sharing" below.
+
+### Live position sharing: opt-in, coarse, non-persistent
+
+A different privacy category from geofence triggering (which only ever checks a rider's own position against 8 fixed public station points): this broadcasts one rider's live location to other riders, so it gets its own guardrails, implemented in `backend/app/story_engine/live_share.py`:
+
+- **Opt-in only** — off by default; a position is shared only after a rider explicitly checks "Share my live position" in Companion Mode, and only while GPS tracking is actually running.
+- **Coarse, not exact** — every shared position is snapped to a ~150m grid cell before it's stored. Raw device GPS coordinates are never persisted, even in memory.
+- **Anonymous** — riders are keyed by a random client-generated id with no link to any name, session, or other identity field.
+- **Non-persistent** — positions live in an in-memory store with a 45-second TTL and are never written to disk. Restarting the backend clears all of it (and this doesn't scale past a single server process — a known, stated limitation at this project's current scope, not a silent one).
+- **Explicit leave** — turning sharing off, stopping GPS tracking, or closing the tab (via `navigator.sendBeacon`) removes a rider's position immediately rather than waiting out the TTL.
 
 ### Content model: human-sourced first, AI assistive only
 

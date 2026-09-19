@@ -17,14 +17,13 @@ from __future__ import annotations
 
 import os
 
-import os
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, constr
 
 from app.story_engine.content_store import get_story, get_pois
 from app.story_engine.geofence import find_triggered_waypoint, route_progress_fraction
+from app.story_engine.live_share import is_valid_rider_id, live_position_store
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
 app = FastAPI(title="Kasi Compass — Train Journey Mapper (lab integration)")
@@ -119,3 +118,71 @@ def journey_route() -> list[dict]:
 def journey_pois(waypoint_id: str) -> list[dict]:
     """Return nearby shops, markets, fuel, parking, and tourist sites for a stop."""
     return get_pois(waypoint_id)
+
+
+class SharePositionRequest(BaseModel):
+    # UUID-shaped and nothing more — see live_share.py's module docstring
+    # for why rider_id is deliberately opaque (no name, no session, no
+    # link to anything else about the rider).
+    rider_id: constr(min_length=36, max_length=36)
+    lat: float
+    lon: float
+
+
+class SharePositionResponse(BaseModel):
+    active_riders: int
+
+
+class SharedRiderPosition(BaseModel):
+    rider_id: str
+    lat: float
+    lon: float
+    seconds_ago: float
+
+
+def _validate_rider_id(rider_id: str) -> None:
+    if not is_valid_rider_id(rider_id):
+        raise HTTPException(status_code=422, detail="rider_id must be a UUID")
+
+
+@app.post("/journey/share-position", response_model=SharePositionResponse)
+def share_position(payload: SharePositionRequest) -> SharePositionResponse:
+    """
+    Opt-in only: the frontend calls this exclusively when a rider has
+    explicitly turned on position sharing in Companion Mode. The stored
+    position is fuzzed to a ~150m grid cell before it ever touches memory
+    — see live_share.fuzz_coordinate. Nothing here is written to disk.
+    """
+    _validate_rider_id(payload.rider_id)
+    _validate_coordinates(payload.lat, payload.lon)
+
+    count = live_position_store.share_position(payload.rider_id, payload.lat, payload.lon)
+    return SharePositionResponse(active_riders=count)
+
+
+@app.get("/journey/shared-positions", response_model=list[SharedRiderPosition])
+def shared_positions(rider_id: str) -> list[SharedRiderPosition]:
+    """
+    Return other riders' current fuzzed positions, excluding the caller's
+    own. A rider who has never called /journey/share-position simply isn't
+    in the store — this endpoint works for any rider_id shape-valid enough
+    to identify "not me" in the results, whether or not that rider is
+    themselves sharing.
+    """
+    _validate_rider_id(rider_id)
+    positions = live_position_store.get_other_positions(rider_id)
+    return [SharedRiderPosition(**p) for p in positions]
+
+
+@app.post("/journey/share-position/leave", status_code=204)
+def leave_shared_position(payload: SharePositionRequest) -> None:
+    """
+    Explicit opt-out: removes a rider's position immediately rather than
+    waiting for TTL expiry. Called when a rider turns sharing off, stops
+    Companion Mode, or closes the tab (via navigator.sendBeacon, which
+    only supports POST — hence this being a POST rather than DELETE).
+    Reuses SharePositionRequest purely for its rider_id field; lat/lon are
+    ignored here.
+    """
+    _validate_rider_id(payload.rider_id)
+    live_position_store.leave(payload.rider_id)

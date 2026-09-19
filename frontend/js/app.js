@@ -3,6 +3,8 @@ let explorerInterval = null;
 let companionWatchId = null;
 let currentLanguage = 'en';
 let lastFocusedElement = null;
+let sharingPosition = false;
+let sharedPositionsInterval = null;
 
 const els = {
     btnExplorer: document.getElementById('btn-explorer'),
@@ -13,6 +15,8 @@ const els = {
     speedValue: document.getElementById('speed-value'),
     btnGps: document.getElementById('btn-gps'),
     gpsStatus: document.getElementById('gps-status'),
+    shareToggle: document.getElementById('share-position-toggle'),
+    shareStatus: document.getElementById('share-status'),
     explorerControls: document.getElementById('explorer-controls'),
     companionControls: document.getElementById('companion-controls'),
     progressFill: document.getElementById('progress-fill'),
@@ -37,6 +41,7 @@ function init() {
     els.btnPause.addEventListener('click', pauseExplorerJourney);
     els.speedSlider.addEventListener('input', updateSpeed);
     els.btnGps.addEventListener('click', toggleCompanionMode);
+    els.shareToggle.addEventListener('change', onShareToggleChanged);
     els.closeStory.addEventListener('click', hideStoryCard);
     els.languageSelect.addEventListener('change', (e) => { currentLanguage = e.target.value; });
 
@@ -183,6 +188,12 @@ async function toggleCompanionMode() {
                     }
                     updateTrainPosition(progress);
                     updateProgressUI(progress);
+
+                    if (sharingPosition) {
+                        shareMyPosition(latitude, longitude).catch(err => {
+                            console.error('Failed to share position:', err);
+                        });
+                    }
                 } catch (err) {
                     console.error('Failed to fetch position:', err);
                 }
@@ -212,7 +223,59 @@ function stopCompanionMode() {
     els.btnGps.textContent = 'Start GPS Tracking';
     els.gpsStatus.textContent = 'GPS inactive';
 
+    // Sharing only makes sense while GPS tracking is actually running —
+    // stopping GPS always stops sharing too, regardless of the toggle's
+    // last state, so a rider's position never keeps broadcasting after
+    // they've turned tracking off.
+    if (sharingPosition) {
+        els.shareToggle.checked = false;
+        disableSharing();
+    }
+
     updateProgressUI(0);
+}
+
+async function onShareToggleChanged() {
+    if (els.shareToggle.checked) {
+        if (companionWatchId === null) {
+            // Sharing without GPS running has nothing to share — guard
+            // against the checkbox being toggled before "Start GPS
+            // Tracking" is pressed.
+            els.shareToggle.checked = false;
+            els.shareStatus.textContent = 'Start GPS tracking first';
+            return;
+        }
+        enableSharing();
+    } else {
+        await disableSharing();
+    }
+}
+
+function enableSharing() {
+    sharingPosition = true;
+    els.shareStatus.textContent = 'Sharing your position with nearby riders';
+
+    if (sharedPositionsInterval) return;
+    sharedPositionsInterval = setInterval(async () => {
+        try {
+            const others = await fetchSharedPositions();
+            renderOtherRiders(others);
+        } catch (err) {
+            console.error('Failed to fetch shared positions:', err);
+        }
+    }, 10000);
+}
+
+async function disableSharing() {
+    sharingPosition = false;
+    els.shareStatus.textContent = 'Not sharing';
+
+    if (sharedPositionsInterval) {
+        clearInterval(sharedPositionsInterval);
+        sharedPositionsInterval = null;
+    }
+    clearOtherRiders();
+    await stopSharingPosition();
 }
 
 function onProgressUpdate(progress) {
