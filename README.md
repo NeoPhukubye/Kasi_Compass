@@ -34,6 +34,28 @@ Following direct feedback from Geekulcha organizers to align this build "more to
 - **AI has exactly one allowed role**: drafting a first-pass translation of an already human-approved story into another official South African language, for a human (ideally first-language speaker) to review before it's ever published. AI is never called at request time — nothing in the runtime request path depends on an AI service being available.
 - This removes AI-outage/hallucination risk from the critical path entirely, and keeps the commitment to telling each place's story with input from people who actually live there.
 
+#### How the AI-assisted translation is implemented
+
+The one permitted AI role is built as a deliberately **offline, two-step tool** — `backend/tools/translate_stories.py` — using Google's **Gemini API** for first-pass translation of human-approved English stories into isiZulu, Afrikaans, isiXhosa and the other official languages (specifically to **Google Gemini (AI-assisted translation)**).
+
+AI output cannot reach a rider unreviewed, and the tooling enforces that mechanically rather than by convention:
+
+```
+Step 1 — draft   python3 tools/translate_stories.py draft --waypoint kimberley --language zu
+                 -> calls Gemini, writes translation_drafts/kimberley.zu.json
+                 -> marked "reviewed": false.  content_store.py is NOT touched.
+
+Step 2 — approve python3 tools/translate_stories.py apply --draft translation_drafts/kimberley.zu.json \
+                     --reviewed-by "Sipho Ndlovu, first-language Zulu reviewer"
+                 -> refuses unless a human set "reviewed": true
+                 -> rejects AI-looking reviewer names ("Gemini", "GPT", "AI", ...)
+                 -> prints a ready-to-paste LocalizedStory block for the reviewer to commit
+```
+
+The guardrails are covered by tests (`backend/tests/test_translation_tool.py`), including one that parses `api.py` to assert the running service imports neither the translation tool nor any AI SDK. Running the app with `GEMINI_API_KEY` unset is a **supported, fully-functional state**: the API returns human-reviewed stories with no key and no network, which is what makes the TRL 4 "no AI in the request path" claim verifiable rather than aspirational.
+
+> **Note on the map:** the map deliberately uses **MapLibre GL JS with OpenStreetMap tiles**, not Google Maps. This needs no API key and no billing account, so the animated map works offline in the lab and can't leak a key from public frontend JavaScript. A Google Maps key shipped in `frontend/js/` would be readable by anyone and billable by anyone — so the map stays on MapLibre.
+
 ## 4. Technological Architecture
 
 ```
@@ -63,12 +85,14 @@ Per organizer guidance to build to **TRL 4** ahead of the hackathon weekend, thi
 **TRL 3 evidence (isolated components, already had this):**
 - Geofence-triggered story engine — haversine distance logic (`app/story_engine/geofence.py`)
 - Real route/waypoint data model (`app/story_engine/route.py`)
+- Along-track progress interpolation for smooth map animation (`frontend/js/geo.js`)
 - 9 passing unit tests (`backend/tests/test_story_engine.py`)
 
 **TRL 4 evidence (integrated system, validated together — new):**
 - A single running FastAPI service (`app/story_engine/api.py`) that wires the route data, geofence engine, and human-sourced content store together into one request path -- `GET /journey/position?lat=...&lon=...` returns the correct triggered waypoint *and* its human-reviewed story in one call, with no manual glue code between modules.
 - **5 end-to-end integration tests** (`backend/tests/test_integration.py`) that exercise this actual running app via `TestClient` -- real HTTP requests in, real JSON responses out -- including a test that confirms every returned story carries a human reviewer, not an AI attribution.
-- **14/14 tests passing** across both suites.
+- **Guardrail tests for the AI-assisted translation path** (`backend/tests/test_translation_tool.py`) — verifies the running API imports no AI SDK, that drafts can't be applied without human review, and that AI-looking reviewer names are rejected.
+- **26/26 tests passing** across all three suites.
 
 **Not yet reached (TRL 5+):**
 - No live GPS feed from an actual train -- Companion Mode is validated against known coordinates in this lab environment, not yet tested onboard a moving train.
@@ -132,11 +156,22 @@ backend/
     geofence.py         # Haversine-based story trigger engine
     content_store.py    # Human-sourced, human-reviewed story content
     api.py               # Integrated FastAPI service (TRL 4 evidence)
+  tools/
+    translate_stories.py   # OFFLINE Gemini drafts for human review — not in request path
   tests/
-    test_story_engine.py   # Unit tests (TRL 3 evidence)
-    test_integration.py     # End-to-end integration tests (TRL 4 evidence)
+    test_story_engine.py     # Unit tests (TRL 3 evidence)
+    test_integration.py       # End-to-end integration tests (TRL 4 evidence)
+    test_translation_tool.py  # AI-guardrail tests (human review, no AI in runtime)
+  .env.example          # GEMINI_API_KEY template (copy to .env, which is gitignored)
+frontend/
+  js/geo.js             # Shared haversine + along-track progress interpolation
+  js/map.js             # MapLibre map, route, markers, animation
+  js/app.js             # Mode switching, GPS, story cards
+  js/api.js             # Backend API client
 planning/
   Kasi_Compass_WBS.xlsx   # Full work breakdown structure with dates/owners
 ```
 
 Run tests: `cd backend && PYTHONPATH=. python3 -m pytest tests/ -v`
+
+The app runs with **no API key at all** — that is a supported state. `GEMINI_API_KEY` is needed only for the offline translation tool.
