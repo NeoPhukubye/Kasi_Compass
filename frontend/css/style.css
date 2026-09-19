@@ -202,6 +202,15 @@ main {
     }
 }
 
+@keyframes pulse-marker {
+    0%, 100% {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 0 0 8px rgba(26,71,42,0.2);
+    }
+    50% {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 0 0 16px rgba(26,71,42,0);
+    }
+}
+
 #close-story {
     position: absolute;
     top: 0.5rem;
