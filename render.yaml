@@ -7,3 +7,5 @@ services:
     envVars:
       - key: ENVIRONMENT
         value: production
+      - key: PYTHONPATH
+        value: /opt/render/project/src/backend
