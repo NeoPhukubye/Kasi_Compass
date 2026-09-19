@@ -8,10 +8,13 @@ let isAnimating = false;
 let animationSpeed = 3;
 let triggeredWaypoints = new Set();
 
-const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const TILE_ATTRIBUTION = '© OpenStreetMap contributors';
+const TILE_ATTRIBUTION = '© OpenStreetMap contributors, © CARTO';
 
 function initMap() {
+    const tileUrls = ['a', 'b', 'c', 'd'].map(s =>
+        `https://${s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png`
+    );
+
     map = new maplibregl.Map({
         container: 'map',
         style: {
@@ -19,7 +22,7 @@ function initMap() {
             sources: {
                 'osm-tiles': {
                     type: 'raster',
-                    tiles: [TILE_URL],
+                    tiles: tileUrls,
                     tileSize: 256,
                     attribution: TILE_ATTRIBUTION,
                 },
