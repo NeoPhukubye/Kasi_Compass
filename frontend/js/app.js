@@ -1,6 +1,8 @@
 let currentMode = 'explorer';
 let explorerInterval = null;
 let companionWatchId = null;
+let currentLanguage = 'en';
+let lastFocusedElement = null;
 
 const els = {
     btnExplorer: document.getElementById('btn-explorer'),
@@ -15,11 +17,13 @@ const els = {
     companionControls: document.getElementById('companion-controls'),
     progressFill: document.getElementById('progress-fill'),
     progressText: document.getElementById('progress-text'),
+    progressBar: document.querySelector('.progress-bar'),
     storyCard: document.getElementById('story-card'),
     storyTitle: document.getElementById('story-title'),
     storyText: document.getElementById('story-text'),
     storySource: document.getElementById('story-source'),
     closeStory: document.getElementById('close-story'),
+    languageSelect: document.getElementById('language-select'),
 };
 
 function init() {
@@ -32,6 +36,9 @@ function init() {
     els.speedSlider.addEventListener('input', updateSpeed);
     els.btnGps.addEventListener('click', toggleCompanionMode);
     els.closeStory.addEventListener('click', hideStoryCard);
+    els.languageSelect.addEventListener('change', (e) => { currentLanguage = e.target.value; });
+
+    document.addEventListener('keydown', handleKeydown);
 
     window.onProgressUpdate = onProgressUpdate;
     window.onJourneyComplete = onJourneyComplete;
@@ -40,18 +47,41 @@ function init() {
     loadRoute();
 }
 
+function handleKeydown(e) {
+    if (e.key === 'Escape' && !els.storyCard.classList.contains('hidden')) {
+        hideStoryCard();
+        if (lastFocusedElement) {
+            lastFocusedElement.focus();
+        }
+    }
+    if (els.speedSlider.matches(':focus') && (e.key === 'ArrowLeft' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        els.speedSlider.value = Math.max(1, parseInt(els.speedSlider.value, 10) - 1);
+        updateSpeed();
+    }
+    if (els.speedSlider.matches(':focus') && (e.key === 'ArrowRight' || e.key === 'ArrowUp')) {
+        e.preventDefault();
+        els.speedSlider.value = Math.min(10, parseInt(els.speedSlider.value, 10) + 1);
+        updateSpeed();
+    }
+}
+
 function switchMode(mode) {
     currentMode = mode;
 
     if (mode === 'explorer') {
         els.btnExplorer.classList.add('active');
+        els.btnExplorer.setAttribute('aria-pressed', 'true');
         els.btnCompanion.classList.remove('active');
+        els.btnCompanion.setAttribute('aria-pressed', 'false');
         els.explorerControls.classList.remove('hidden');
         els.companionControls.classList.add('hidden');
         stopCompanionMode();
     } else {
         els.btnCompanion.classList.add('active');
+        els.btnCompanion.setAttribute('aria-pressed', 'true');
         els.btnExplorer.classList.remove('active');
+        els.btnExplorer.setAttribute('aria-pressed', 'false');
         els.companionControls.classList.remove('hidden');
         els.explorerControls.classList.add('hidden');
         pauseExplorerJourney();
@@ -86,7 +116,7 @@ function startExplorerJourney() {
         if (!pos) return;
 
         try {
-            const result = await fetchPosition(pos.lat, pos.lon);
+            const result = await fetchPosition(pos.lat, pos.lon, currentLanguage);
             if (result.triggered && result.story_text) {
                 showStoryCard(result);
             }
@@ -114,6 +144,7 @@ function updateSpeed() {
     const speed = parseInt(els.speedSlider.value, 10);
     setSpeed(speed);
     els.speedValue.textContent = `${speed}x`;
+    els.speedSlider.setAttribute('aria-valuenow', String(speed));
 }
 
 async function toggleCompanionMode() {
@@ -137,14 +168,7 @@ async function toggleCompanionMode() {
                 els.gpsStatus.textContent = `GPS active: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
 
                 try {
-                    const result = await fetchPosition(latitude, longitude);
-                    // Position the marker with true along-track progress, not a
-                    // nearest-waypoint index. Both the backend's
-                    // route_progress_fraction and getNearestWaypoint().progress
-                    // are quantised to 1/(n-1) steps, so the icon jumped between
-                    // stations instead of moving smoothly. alongTrackProgress
-                    // projects the GPS fix onto the nearest route segment and
-                    // measures cumulative distance, giving continuous motion.
+                    const result = await fetchPosition(latitude, longitude, currentLanguage);
                     const alongTrack = alongTrackProgress(
                         latitude, longitude, waypoints
                     );
@@ -155,8 +179,6 @@ async function toggleCompanionMode() {
                     if (result.triggered && result.story_text) {
                         showStoryCard(result);
                     }
-                    // One fraction drives both the marker and the progress bar,
-                    // so the two can never disagree with each other.
                     updateTrainPosition(progress);
                     updateProgressUI(progress);
                 } catch (err) {
@@ -188,44 +210,7 @@ function stopCompanionMode() {
     els.btnGps.textContent = 'Start GPS Tracking';
     els.gpsStatus.textContent = 'GPS inactive';
 
-    // Leaving Companion Mode should not strand the progress bar on whatever
-    // fraction the last GPS fix happened to report — reset it to the idle
-    // "Ready to begin" state so both modes start from a clean slate.
     updateProgressUI(0);
-}
-
-// Uses the single shared haversine implementation in js/geo.js (loaded before
-// this file in index.html). This is only a client-side approximation for
-// animating the train icon and showing "approaching X" hints — the backend
-// (app/story_engine/geofence.py) remains the single source of truth for which
-// waypoint actually triggers a story.
-function getNearestWaypoint(lat, lon) {
-    if (!waypoints.length) return null;
-    if (typeof haversineMeters !== 'function') {
-        console.error('geo.js (haversineMeters) not loaded — check script order in index.html');
-        return null;
-    }
-    if (waypoints.length < 2) {
-        return { ...waypoints[0], progress: 0 };
-    }
-
-    let nearest = null;
-    let minDist = Infinity;
-    let nearestIndex = 0;
-
-    // Use the array index directly rather than waypoints.indexOf(w) inside the
-    // loop, which was O(n^2) and relied on object identity.
-    waypoints.forEach((w, index) => {
-        const d = haversineMeters(lat, lon, w.lat, w.lon);
-        if (d < minDist) {
-            minDist = d;
-            nearest = w;
-            nearestIndex = index;
-        }
-    });
-
-    if (!nearest) return null;
-    return { ...nearest, progress: nearestIndex / (waypoints.length - 1) };
 }
 
 function onProgressUpdate(progress) {
@@ -235,6 +220,10 @@ function onProgressUpdate(progress) {
 function updateProgressUI(progress) {
     const percent = Math.round(progress * 100);
     els.progressFill.style.width = `${percent}%`;
+
+    if (els.progressBar) {
+        els.progressBar.setAttribute('aria-valuenow', String(percent));
+    }
 
     if (progress <= 0) {
         els.progressText.textContent = 'Ready to begin';
@@ -249,8 +238,6 @@ function updateProgressUI(progress) {
 }
 
 function getCurrentWaypoint(progress) {
-    // Guard before dividing by (waypoints.length - 1): with a single waypoint
-    // that divisor is 0, which yields NaN/Infinity and an out-of-range index.
     if (waypoints.length < 2) return null;
     const safeProgress = Math.max(0, Math.min(1, progress || 0));
     const idx = Math.round(safeProgress * (waypoints.length - 1));
@@ -271,8 +258,6 @@ function onWaypointClick(waypoint) {
     const idx = waypoints.indexOf(waypoint);
     if (idx === -1) return;
 
-    // Same single-waypoint guard as getCurrentWaypoint: never divide by
-    // (waypoints.length - 1) when there is only one waypoint.
     if (waypoints.length < 2) {
         setProgress(0);
         return;
@@ -282,14 +267,23 @@ function onWaypointClick(waypoint) {
 }
 
 function showStoryCard(data) {
+    lastFocusedElement = document.activeElement;
     els.storyTitle.textContent = data.waypoint_name || 'Stop';
     els.storyText.textContent = data.story_text || '';
     els.storySource.textContent = data.story_source ? `Source: ${data.story_source}` : '';
     els.storyCard.classList.remove('hidden');
+    els.storyCard.setAttribute('aria-hidden', 'false');
+    setTimeout(() => {
+        els.closeStory.focus();
+    }, 100);
 }
 
 function hideStoryCard() {
     els.storyCard.classList.add('hidden');
+    els.storyCard.setAttribute('aria-hidden', 'true');
+    if (lastFocusedElement) {
+        lastFocusedElement.focus();
+    }
 }
 
 document.addEventListener('DOMContentLoaded', init);
