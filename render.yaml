@@ -3,9 +3,7 @@ services:
     name: kasi-compass-backend
     runtime: python3
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.app.story_engine.api:app --host 0.0.0.0 --port $PORT
+    startCommand: cd backend && uvicorn app.story_engine.api:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: ENVIRONMENT
         value: production
-      - key: PYTHONPATH
-        value: /opt/render/project/src/backend
