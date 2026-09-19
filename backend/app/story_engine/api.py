@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import os
 
+import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.story_engine.content_store import get_story
+from app.story_engine.content_store import get_story, get_pois
 from app.story_engine.geofence import find_triggered_waypoint, route_progress_fraction
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
@@ -111,3 +113,9 @@ def journey_route() -> list[dict]:
         {"id": w.id, "name": w.name, "lat": w.latitude, "lon": w.longitude}
         for w in PRETORIA_TO_CAPE_TOWN
     ]
+
+
+@app.get("/journey/pois")
+def journey_pois(waypoint_id: str) -> list[dict]:
+    """Return nearby shops, markets, fuel, parking, and tourist sites for a stop."""
+    return get_pois(waypoint_id)
