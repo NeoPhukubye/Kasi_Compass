@@ -1,4 +1,4 @@
-const API_BASE = window.KASI_API_BASE || 'http://localhost:8000';
+const API_BASE = window.KASI_API_BASE;
 
 async function fetchRoute() {
     const response = await fetch(`${API_BASE}/journey/route`);
