@@ -24,3 +24,11 @@ async function fetchPosition(lat, lon, language = 'en') {
     }
     return response.json();
 }
+
+async function fetchPOIs(waypointId) {
+    const response = await fetch(`${API_BASE}/journey/pois?waypoint_id=${encodeURIComponent(waypointId)}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch POIs: ${response.statusText}`);
+    }
+    return response.json();
+}
