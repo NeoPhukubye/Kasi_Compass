@@ -4,6 +4,36 @@
     box-sizing: border-box;
 }
 
+.skip-link {
+    position: absolute;
+    top: -100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary);
+    color: var(--white);
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius);
+    z-index: 1000;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.skip-link:focus {
+    top: 1rem;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 :root {
     --primary: #1a472a;
     --primary-light: #2d6a4f;
@@ -15,6 +45,8 @@
     --white: #ffffff;
     --shadow: rgba(0, 0, 0, 0.1);
     --radius: 8px;
+    --focus-ring: 3px solid var(--accent);
+    --focus-offset: 2px;
 }
 
 body {
@@ -22,6 +54,19 @@ body {
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
+}
+
+*:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
 }
 
 #app {
@@ -86,6 +131,32 @@ main {
     flex-direction: column;
     padding: 1rem;
     gap: 1rem;
+}
+
+#language-switcher {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 8px var(--shadow);
+    font-size: 0.95rem;
+}
+
+#language-switcher label {
+    font-weight: 600;
+    color: var(--text);
+}
+
+#language-switcher select {
+    padding: 0.4rem 0.8rem;
+    border: 2px solid var(--primary);
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    color: var(--text);
+    background: var(--white);
+    cursor: pointer;
 }
 
 #map-container {
@@ -267,6 +338,17 @@ footer {
     font-size: 0.85rem;
     border-top: 1px solid #ddd;
     background: var(--white);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 @media (max-width: 600px) {
