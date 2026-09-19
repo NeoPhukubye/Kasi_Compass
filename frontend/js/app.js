@@ -22,6 +22,8 @@ const els = {
     storyTitle: document.getElementById('story-title'),
     storyText: document.getElementById('story-text'),
     storySource: document.getElementById('story-source'),
+    storyPois: document.getElementById('story-pois'),
+    poiList: document.getElementById('poi-list'),
     closeStory: document.getElementById('close-story'),
     languageSelect: document.getElementById('language-select'),
 };
@@ -273,6 +275,18 @@ function showStoryCard(data) {
     els.storySource.textContent = data.story_source ? `Source: ${data.story_source}` : '';
     els.storyCard.classList.remove('hidden');
     els.storyCard.setAttribute('aria-hidden', 'false');
+
+    fetchPOIs(data.waypoint_id)
+        .then(pois => {
+            els.poiList.innerHTML = pois.map(p =>
+                `<li><span>${p.name}</span> <span class="poi-type">${p.type}</span></li>`
+            ).join('');
+            els.storyPois.classList.remove('hidden');
+        })
+        .catch(() => {
+            els.storyPois.classList.add('hidden');
+        });
+
     setTimeout(() => {
         els.closeStory.focus();
     }, 100);
