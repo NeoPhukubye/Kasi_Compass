@@ -251,6 +251,46 @@ main {
     font-style: italic;
 }
 
+#story-pois {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 2px solid var(--accent);
+}
+
+#story-pois h3 {
+    font-size: 0.95rem;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+}
+
+#poi-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#poi-list li {
+    padding: 0.4rem 0;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#poi-list li::before {
+    content: "📍";
+    font-size: 0.8rem;
+}
+
+#poi-list li .poi-type {
+    font-size: 0.75rem;
+    color: var(--text-light);
+    text-transform: uppercase;
+    background: var(--bg);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+}
+
 #controls {
     display: flex;
     flex-direction: column;
