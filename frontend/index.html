@@ -4,32 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kasi Compass — Train Journey Mapper</title>
-    <!-- Overridden at GitHub Pages deploy time by .github/workflows/deploy.yml,
-         which writes js/config.js from the BACKEND_API_URL repo variable.
-         This fallback only fires for local dev (`python3 -m http.server`),
-         so it deliberately does NOT default to localhost in a way that
-         could mask a missing production config — see js/config.js. -->
     <script src="js/config.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <div id="app">
-        <header>
+        <header role="banner">
             <h1>Kasi Compass</h1>
             <p class="tagline">Every stop tells a story.</p>
         </header>
 
-        <nav id="mode-switcher">
-            <button id="btn-explorer" class="active">Explorer Mode</button>
-            <button id="btn-companion">Companion Mode</button>
+        <nav id="mode-switcher" role="navigation" aria-label="Journey mode">
+            <button id="btn-explorer" class="active" aria-pressed="true">Explorer Mode</button>
+            <button id="btn-companion" aria-pressed="false">Companion Mode</button>
         </nav>
 
-        <main>
-            <div id="map-container">
-                <div id="map"></div>
-                <div id="story-card" class="hidden">
-                    <button id="close-story">&times;</button>
+        <main id="main-content" role="main">
+            <div id="language-switcher" role="group" aria-label="Story language">
+                <label for="language-select">Story language:</label>
+                <select id="language-select">
+                    <option value="en" selected>English</option>
+                    <option value="zu">isiZulu</option>
+                    <option value="af">Afrikaans</option>
+                    <option value="xh">isiXhosa</option>
+                </select>
+            </div>
+
+            <div id="map-container" role="application" aria-label="Interactive map of Pretoria to Cape Town rail corridor">
+                <div id="map" aria-hidden="false"></div>
+                <div id="story-card" class="hidden" role="dialog" aria-modal="true" aria-labelledby="story-title" aria-describedby="story-text">
+                    <button id="close-story" aria-label="Close story">&times;</button>
                     <h2 id="story-title"></h2>
                     <p id="story-text"></p>
                     <p id="story-source"></p>
@@ -38,29 +44,29 @@
 
             <div id="controls">
                 <div id="explorer-controls">
-                    <button id="btn-start-journey">Start Journey</button>
-                    <button id="btn-pause-journey" disabled>Pause</button>
+                    <button id="btn-start-journey" aria-label="Start explorer journey">Start Journey</button>
+                    <button id="btn-pause-journey" disabled aria-label="Pause journey">Pause</button>
                     <div class="speed-control">
                         <label for="speed-slider">Speed:</label>
-                        <input type="range" id="speed-slider" min="1" max="10" value="3">
-                        <span id="speed-value">3x</span>
+                        <input type="range" id="speed-slider" min="1" max="10" value="3" aria-label="Animation speed" aria-valuemin="1" aria-valuemax="10" aria-valuenow="3">
+                        <span id="speed-value" aria-live="polite">3x</span>
                     </div>
                 </div>
                 <div id="companion-controls" class="hidden">
-                    <button id="btn-gps">Start GPS Tracking</button>
-                    <p id="gps-status">GPS inactive</p>
+                    <button id="btn-gps" aria-label="Start GPS tracking">Start GPS Tracking</button>
+                    <p id="gps-status" aria-live="polite">GPS inactive</p>
                 </div>
             </div>
 
-            <div id="journey-progress">
-                <div class="progress-bar">
+            <div id="journey-progress" role="region" aria-label="Journey progress">
+                <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Journey progress">
                     <div id="progress-fill"></div>
                 </div>
-                <p id="progress-text">Ready to begin</p>
+                <p id="progress-text" aria-live="polite">Ready to begin</p>
             </div>
         </main>
 
-        <footer>
+        <footer role="contentinfo">
             <p>Team NeoDev — Geekulcha Annual Hackathon 2026</p>
         </footer>
     </div>
