@@ -138,16 +138,27 @@ async function toggleCompanionMode() {
 
                 try {
                     const result = await fetchPosition(latitude, longitude);
+                    // Position the marker with true along-track progress, not a
+                    // nearest-waypoint index. Both the backend's
+                    // route_progress_fraction and getNearestWaypoint().progress
+                    // are quantised to 1/(n-1) steps, so the icon jumped between
+                    // stations instead of moving smoothly. alongTrackProgress
+                    // projects the GPS fix onto the nearest route segment and
+                    // measures cumulative distance, giving continuous motion.
+                    const alongTrack = alongTrackProgress(
+                        latitude, longitude, waypoints
+                    );
+                    const progress = alongTrack !== null
+                        ? alongTrack
+                        : result.route_progress_fraction;
+
                     if (result.triggered && result.story_text) {
-                        updateTrainPosition(result.route_progress_fraction);
                         showStoryCard(result);
-                    } else {
-                        const nearest = getNearestWaypoint(latitude, longitude);
-                        if (nearest) {
-                            updateTrainPosition(nearest.progress);
-                        }
                     }
-                    updateProgressUI(result.route_progress_fraction);
+                    // One fraction drives both the marker and the progress bar,
+                    // so the two can never disagree with each other.
+                    updateTrainPosition(progress);
+                    updateProgressUI(progress);
                 } catch (err) {
                     console.error('Failed to fetch position:', err);
                 }
