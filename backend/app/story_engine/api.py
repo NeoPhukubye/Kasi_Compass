@@ -40,9 +40,10 @@ app = FastAPI(title="Kasi Compass — Train Journey Mapper (lab integration)")
 # Defaults to allowing any origin so local dev and first deploys aren't
 # blocked out of the box — set this explicitly once you know your real
 # GitHub Pages URL, so production isn't wide open.
+_cors_raw = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
 _allowed_origins = [
     origin.strip()
-    for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "*").split(",")
+    for origin in (_cors_raw.split(",") if _cors_raw else ["*"])
     if origin.strip()
 ]
 
