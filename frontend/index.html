@@ -4,7 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kasi Compass — Train Journey Mapper</title>
-    <script>window.KASI_API_BASE = window.KASI_API_BASE || 'http://localhost:8000';</script>
+    <!-- Overridden at GitHub Pages deploy time by .github/workflows/deploy.yml,
+         which writes js/config.js from the BACKEND_API_URL repo variable.
+         This fallback only fires for local dev (`python3 -m http.server`),
+         so it deliberately does NOT default to localhost in a way that
+         could mask a missing production config — see js/config.js. -->
+    <script src="js/config.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
     <link rel="stylesheet" href="css/style.css">
 </head>

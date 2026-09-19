@@ -23,6 +23,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Guard - BACKEND_API_URL must be set
+        run: |
+          if [ -z "${{ vars.BACKEND_API_URL }}" ]; then
+            echo "::error::Repository variable BACKEND_API_URL is not set (Settings > Secrets and variables > Actions > Variables)."
+            echo "::error::Without it this deploy would silently ship http://localhost:8000 to production — failing instead."
+            exit 1
+          fi
+
+      - name: Inject production backend URL
+        run: |
+          echo "window.KASI_API_BASE = '${{ vars.BACKEND_API_URL }}';" > frontend/js/config.js
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

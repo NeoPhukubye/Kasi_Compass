@@ -15,7 +15,10 @@ integration test rather than another unit test in a trenchcoat.
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.story_engine.content_store import get_story
@@ -23,6 +26,32 @@ from app.story_engine.geofence import find_triggered_waypoint, route_progress_fr
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
 app = FastAPI(title="Kasi Compass — Train Journey Mapper (lab integration)")
+
+# Frontend (GitHub Pages) and backend (Render) are deployed as separate
+# origins, so the browser enforces CORS on every request between them.
+# Without this, the deployed frontend gets a silent fetch failure — it
+# still works on localhost (same-origin-ish over different ports is also
+# blocked by browsers, actually, but a lot of local dev setups relax this
+# via browser flags/extensions people forget they have on) which is why
+# this gap can go unnoticed until someone opens the *deployed* site.
+#
+# CORS_ALLOWED_ORIGINS: comma-separated list, e.g.
+#   "https://<org>.github.io,http://localhost:3000"
+# Defaults to allowing any origin so local dev and first deploys aren't
+# blocked out of the box — set this explicitly once you know your real
+# GitHub Pages URL, so production isn't wide open.
+_allowed_origins = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "*").split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
 
 
 class JourneyPositionResponse(BaseModel):

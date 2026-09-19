@@ -1,0 +1,5 @@
+# Test-only dependencies. NOT installed in the Docker image or on Render —
+# see requirements.txt for the lean runtime set.
+-r requirements.txt
+pytest>=7.0.0
+httpx>=0.24.0
