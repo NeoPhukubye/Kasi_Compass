@@ -17,9 +17,9 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, constr
+from pydantic import BaseModel, Field, field_validator
 
 from app.story_engine.content_store import get_story, get_pois
 from app.story_engine.geofence import find_triggered_waypoint, route_progress_fraction
@@ -27,6 +27,12 @@ from app.story_engine.live_share import is_valid_rider_id, live_position_store
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
 app = FastAPI(title="Kasi Compass — Train Journey Mapper (lab integration)")
+
+# Same UUID shape as live_share.RIDER_ID_PATTERN, exposed as a plain pattern
+# string so Pydantic can validate it as part of the request schema.
+UUID_RIDER_ID_PATTERN = (
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 # Frontend (GitHub Pages) and backend (Render) are deployed as separate
 # origins, so the browser enforces CORS on every request between them.
@@ -120,11 +126,26 @@ def journey_pois(waypoint_id: str) -> list[dict]:
     return get_pois(waypoint_id)
 
 
-class SharePositionRequest(BaseModel):
+class RiderIdQuery(BaseModel):
     # UUID-shaped and nothing more — see live_share.py's module docstring
     # for why rider_id is deliberately opaque (no name, no session, no
     # link to anything else about the rider).
-    rider_id: constr(min_length=36, max_length=36)
+    #
+    # The pattern validator makes the UUID shape part of the request schema,
+    # so a malformed 36-character id is rejected with a 422 at validation
+    # time rather than slipping past a length-only check and only failing
+    # later in is_valid_rider_id.
+    rider_id: str = Field(pattern=UUID_RIDER_ID_PATTERN)
+
+    @field_validator("rider_id")
+    @classmethod
+    def _check_rider_id(cls, value: str) -> str:
+        if not is_valid_rider_id(value):
+            raise ValueError("rider_id must be a UUID")
+        return value
+
+
+class SharePositionRequest(RiderIdQuery):
     lat: float
     lon: float
 
@@ -161,7 +182,9 @@ def share_position(payload: SharePositionRequest) -> SharePositionResponse:
 
 
 @app.get("/journey/shared-positions", response_model=list[SharedRiderPosition])
-def shared_positions(rider_id: str) -> list[SharedRiderPosition]:
+def shared_positions(
+    rider_id: str = Query(pattern=UUID_RIDER_ID_PATTERN),
+) -> list[SharedRiderPosition]:
     """
     Return other riders' current fuzzed positions, excluding the caller's
     own. A rider who has never called /journey/share-position simply isn't
