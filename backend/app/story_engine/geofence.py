@@ -12,9 +12,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from app.story_engine.route import PRETORIA_TO_CAPE_TOWN, Waypoint
-
-EARTH_RADIUS_METERS = 6_371_000
+from app.story_engine.route import EARTH_RADIUS_METERS, PRETORIA_TO_CAPE_TOWN, Waypoint
 
 # How close a rider needs to be to a waypoint's coordinates before its story
 # triggers. Real stations sprawl a bit (yards, platforms, approach roads),
