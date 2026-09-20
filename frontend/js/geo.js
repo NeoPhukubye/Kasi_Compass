@@ -6,6 +6,26 @@
 // (see backend/app/story_engine/geofence.py) — do not rely on this for
 // triggering decisions.
 
+// Clamp a progress fraction into the valid [0, 1] range, treating any
+// non-finite value as 0. Single definition of progress semantics for both
+// the map animation and the "approaching X" text hint.
+function clampProgress(progress) {
+    const value = Number(progress);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(1, value));
+}
+
+// Given a progress fraction and the ordered route waypoints, return the
+// waypoint the rider is nearest to, or null if there aren't enough
+// waypoints to interpolate between. Shared by the progress UI and any other
+// caller that needs "which stop is next" from a fraction.
+function waypointAtProgress(progress, routeWaypoints) {
+    if (routeWaypoints.length < 2) return null;
+    const safeProgress = clampProgress(progress);
+    const idx = Math.round(safeProgress * (routeWaypoints.length - 1));
+    return routeWaypoints[Math.min(idx, routeWaypoints.length - 1)];
+}
+
 function haversineMeters(lat1, lon1, lat2, lon2) {
     const R = 6371000;
     const toRad = x => x * Math.PI / 180;
