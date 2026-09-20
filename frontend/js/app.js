@@ -83,7 +83,7 @@ function switchMode(mode) {
         els.btnCompanion.setAttribute('aria-pressed', 'false');
         els.explorerControls.classList.remove('hidden');
         els.companionControls.classList.add('hidden');
-        stopCompanionMode();
+        stopCompanionTracking();
     } else {
         els.btnCompanion.classList.add('active');
         els.btnCompanion.setAttribute('aria-pressed', 'true');
@@ -154,12 +154,21 @@ function updateSpeed() {
     els.speedSlider.setAttribute('aria-valuenow', String(speed));
 }
 
+// Tracks an in-flight share request and how many consecutive share failures
+// we've seen, so repeated failures can be surfaced in the UI rather than
+// only logged to the console.
+let shareInFlight = null;
+let consecutiveShareFailures = 0;
+
 async function toggleCompanionMode() {
     if (companionWatchId !== null) {
-        stopCompanionMode();
+        stopCompanionTracking();
         return;
     }
+    startCompanionTracking();
+}
 
+function startCompanionTracking() {
     if (!navigator.geolocation) {
         els.gpsStatus.textContent = 'Geolocation not supported';
         els.btnGps.textContent = 'Start GPS Tracking';
@@ -170,37 +179,10 @@ async function toggleCompanionMode() {
 
     try {
         companionWatchId = navigator.geolocation.watchPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords;
-                els.gpsStatus.textContent = `GPS active: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-
-                try {
-                    const result = await fetchPosition(latitude, longitude, currentLanguage);
-                    const alongTrack = alongTrackProgress(
-                        latitude, longitude, waypoints
-                    );
-                    const progress = alongTrack !== null
-                        ? alongTrack
-                        : result.route_progress_fraction;
-
-                    if (result.triggered && result.story_text) {
-                        showStoryCard(result);
-                    }
-                    updateTrainPosition(progress);
-                    updateProgressUI(progress);
-
-                    if (sharingPosition) {
-                        shareMyPosition(latitude, longitude).catch(err => {
-                            console.error('Failed to share position:', err);
-                        });
-                    }
-                } catch (err) {
-                    console.error('Failed to fetch position:', err);
-                }
-            },
+            handleCompanionPosition,
             (err) => {
                 els.gpsStatus.textContent = `GPS error: ${err.message}`;
-                stopCompanionMode();
+                stopCompanionTracking();
             },
             {
                 enableHighAccuracy: true,
@@ -211,11 +193,66 @@ async function toggleCompanionMode() {
         els.btnGps.textContent = 'Stop GPS';
     } catch (err) {
         els.gpsStatus.textContent = `GPS error: ${err.message}`;
-        stopCompanionMode();
+        stopCompanionTracking();
     }
 }
 
-function stopCompanionMode() {
+// Named callback for a single GPS update: resolve the story/progress for the
+// current position, redraw the map, and (if sharing is on) push the position
+// to the backend.
+async function handleCompanionPosition(position) {
+    const { latitude, longitude } = position.coords;
+    els.gpsStatus.textContent = `GPS active: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+
+    try {
+        const result = await fetchPosition(latitude, longitude, currentLanguage);
+        const alongTrack = alongTrackProgress(latitude, longitude, waypoints);
+        const progress = alongTrack !== null
+            ? alongTrack
+            : result.route_progress_fraction;
+
+        if (result.triggered && result.story_text) {
+            showStoryCard(result);
+        }
+        updateTrainPosition(progress);
+        updateProgressUI(progress);
+
+        if (sharingPosition) {
+            // Await the share so updates are sent in order, but don't let a
+            // slow/failed share block the GPS redraw that already happened.
+            sharePositionForCompanion(latitude, longitude);
+        }
+    } catch (err) {
+        console.error('Failed to fetch position:', err);
+    }
+}
+
+// Send the current position to the sharing endpoint, skipping the request if
+// one is already in flight (a fast-moving rider can otherwise stack them).
+// Consecutive failures are surfaced in the share status line.
+function sharePositionForCompanion(lat, lon) {
+    if (shareInFlight) return shareInFlight;
+
+    shareInFlight = shareMyPosition(lat, lon)
+        .then(() => {
+            consecutiveShareFailures = 0;
+        })
+        .catch(err => {
+            consecutiveShareFailures += 1;
+            console.error('Failed to share position:', err);
+            if (consecutiveShareFailures === 3) {
+                els.shareStatus.textContent = 'Having trouble sharing your position — check your connection';
+            }
+            return null;
+        })
+        .finally(() => {
+            shareInFlight = null;
+        });
+
+    return shareInFlight;
+}
+
+function stopCompanionTracking() {
     if (companionWatchId !== null) {
         navigator.geolocation.clearWatch(companionWatchId);
         companionWatchId = null;
@@ -295,18 +332,11 @@ function updateProgressUI(progress) {
     } else if (progress >= 1) {
         els.progressText.textContent = 'Journey complete!';
     } else {
-        const waypoint = getCurrentWaypoint(progress);
+        const waypoint = waypointAtProgress(progress, waypoints);
         els.progressText.textContent = waypoint
             ? `Approaching ${waypoint.name}...`
             : `Journey progress: ${percent}%`;
     }
-}
-
-function getCurrentWaypoint(progress) {
-    if (waypoints.length < 2) return null;
-    const safeProgress = Math.max(0, Math.min(1, progress || 0));
-    const idx = Math.round(safeProgress * (waypoints.length - 1));
-    return waypoints[Math.min(idx, waypoints.length - 1)];
 }
 
 function onJourneyComplete() {
@@ -341,9 +371,20 @@ function showStoryCard(data) {
 
     fetchPOIs(data.waypoint_id)
         .then(pois => {
-            els.poiList.innerHTML = pois.map(p =>
-                `<li><span>${p.name}</span> <span class="poi-type">${p.type}</span></li>`
-            ).join('');
+            // Build the list with DOM nodes + textContent rather than an
+            // innerHTML template, so a POI name can never be interpreted as
+            // markup (e.g. a name containing "<script>").
+            els.poiList.replaceChildren();
+            pois.forEach(p => {
+                const li = document.createElement('li');
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = p.name;
+                const typeSpan = document.createElement('span');
+                typeSpan.className = 'poi-type';
+                typeSpan.textContent = p.type;
+                li.append(nameSpan, ' ', typeSpan);
+                els.poiList.appendChild(li);
+            });
             els.storyPois.classList.remove('hidden');
         })
         .catch(() => {
