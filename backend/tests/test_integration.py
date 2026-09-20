@@ -121,6 +121,34 @@ def test_share_position_rejects_non_uuid_rider_id():
         json={"rider_id": "not-a-uuid", "lat": -30.0, "lon": 24.0},
     )
     assert response.status_code == 422
+# A 36-character string that is the right *length* but not UUID-shaped must
+# still be rejected — previously a length-only constraint let it through to
+# the store before is_valid_rider_id caught it.
+# 36 characters, but the segments are non-hex — the right length yet not
+# UUID-shaped.
+MALFORMED_36_CHAR_RIDER_ID = "not-a-uuid-but-exactly-36-characters"
+
+
+def test_share_position_rejects_36_char_non_uuid_rider_id():
+    assert len(MALFORMED_36_CHAR_RIDER_ID) == 36
+    response = client.post(
+        "/journey/share-position",
+        json={"rider_id": MALFORMED_36_CHAR_RIDER_ID, "lat": -30.0, "lon": 24.0},
+    )
+    assert response.status_code == 422
+
+def test_shared_positions_rejects_36_char_non_uuid_rider_id():
+    response = client.get(
+        "/journey/shared-positions", params={"rider_id": MALFORMED_36_CHAR_RIDER_ID}
+    )
+    assert response.status_code == 422
+
+def test_leave_rejects_36_char_non_uuid_rider_id():
+    response = client.post(
+        "/journey/share-position/leave",
+        json={"rider_id": MALFORMED_36_CHAR_RIDER_ID, "lat": 0.0, "lon": 0.0},
+    )
+    assert response.status_code == 422
 
 
 def test_share_position_rejects_invalid_coordinates():
