@@ -47,6 +47,9 @@ class PointOfInterest:
     type: str  # "market", "shop", "restaurant", "tourist_attraction", "fuel", "parking"
     lat: float
     lon: float
+    def as_dict(self) -> dict:
+        """Plain-dict form of this POI for the API response model."""
+        return {"name": self.name, "type": self.type, "lat": self.lat, "lon": self.lon}
 
 
 # Seed content: real waypoints, human-sourced placeholder copy pending
@@ -156,14 +159,10 @@ def get_story(waypoint_id: str, language_code: str = "en") -> LocalizedStory | N
     return entry.localized.get(language_code) or entry.localized.get("en")
 
 
-def get_pois(waypoint_id: str) -> list[dict]:
+def get_pois(waypoint_id: str) -> list[PointOfInterest]:
     """
     Return nearby points of interest for a waypoint (shops, markets,
     fuel stations, parking, tourist sites) so riders can plan
     stops before getting off the train.
     """
-    pois = WAYPOINT_POIS.get(waypoint_id, [])
-    return [
-        {"name": p.name, "type": p.type, "lat": p.lat, "lon": p.lon}
-        for p in pois
-    ]
+    return list(WAYPOINT_POIS.get(waypoint_id, []))
