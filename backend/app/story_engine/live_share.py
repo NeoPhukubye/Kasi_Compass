@@ -36,6 +36,7 @@ import math
 import re
 import time
 from dataclasses import dataclass
+from app.story_engine.route import METERS_PER_DEGREE_LATITUDE
 
 RIDER_ID_PATTERN = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -53,7 +54,7 @@ POSITION_TTL_SECONDS = 45.0
 # of the route" signal over an ~1,800km corridor.
 FUZZ_PRECISION_METERS = 150.0
 
-_EARTH_RADIUS_METERS = 6_371_000
+
 
 
 def is_valid_rider_id(rider_id: str) -> bool:
@@ -69,14 +70,14 @@ def fuzz_coordinate(lat: float, lon: float, precision_meters: float = FUZZ_PRECI
     latitude — rounding longitude the same way you round latitude makes
     the fuzzing radius shrink toward the poles).
     """
-    lat_step_deg = precision_meters / 111_320
+    lat_step_deg = precision_meters / METERS_PER_DEGREE_LATITUDE
     fuzzed_lat = round(lat / lat_step_deg) * lat_step_deg
 
     # Longitude step is derived from the *fuzzed* latitude, not the raw
     # one — two nearby raw points that snap to the same latitude cell must
     # also get an identical longitude step, or they can round to adjacent
     # longitude cells near a boundary purely from float noise in `lat`.
-    lon_step_deg = precision_meters / (111_320 * max(math.cos(math.radians(fuzzed_lat)), 1e-6))
+    lon_step_deg = precision_meters / (METERS_PER_DEGREE_LATITUDE * max(math.cos(math.radians(fuzzed_lat)), 1e-6))
     fuzzed_lon = round(lon / lon_step_deg) * lon_step_deg
     return fuzzed_lat, fuzzed_lon
 
