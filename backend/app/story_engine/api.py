@@ -120,10 +120,20 @@ def journey_route() -> list[dict]:
     ]
 
 
-@app.get("/journey/pois")
-def journey_pois(waypoint_id: str) -> list[dict]:
+
+
+class PointOfInterestResponse(BaseModel):
+    name: str
+    type: str
+
+    lat: float
+
+    lon: float
+
+@app.get("/journey/pois", response_model=list[PointOfInterestResponse])
+def journey_pois(waypoint_id: str) -> list[PointOfInterestResponse]:
     """Return nearby shops, markets, fuel, parking, and tourist sites for a stop."""
-    return get_pois(waypoint_id)
+    return [PointOfInterestResponse(**p.as_dict()) for p in get_pois(waypoint_id)]
 
 
 class RiderIdQuery(BaseModel):
