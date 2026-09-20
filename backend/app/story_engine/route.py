@@ -14,10 +14,11 @@ not town centroids) — see the `is_approximate` flag on each waypoint.
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
-
-
+# Shared geospatial constants — defined once here so geofence.py and
+# live_share.py can't drift apart on the physical values they assume.
+EARTH_RADIUS_METERS = 6_371_000
+METERS_PER_DEGREE_LATITUDE = 111_320
 @dataclass(frozen=True)
 class Waypoint:
     id: str
