@@ -61,16 +61,13 @@ def find_triggered_waypoint(
     real inter-station distances, but possible near a dense cluster), the
     closest one wins.
     """
-    candidates = []
-    for waypoint in PRETORIA_TO_CAPE_TOWN:
+    def trigger_if_in_range(waypoint: Waypoint) -> StoryTrigger | None:
         distance = haversine_meters(current_lat, current_lon, waypoint.latitude, waypoint.longitude)
         if distance <= trigger_radius_meters:
-            candidates.append(StoryTrigger(waypoint=waypoint, distance_meters=distance))
-
-    if not candidates:
+            return StoryTrigger(waypoint=waypoint, distance_meters=distance)
         return None
-
-    return min(candidates, key=lambda c: c.distance_meters)
+    candidates = filter(None, (trigger_if_in_range(w) for w in PRETORIA_TO_CAPE_TOWN))
+    return min(candidates, key=lambda c: c.distance_meters, default=None)
 
 
 def next_waypoint_after(waypoint_id: str) -> Waypoint | None:
