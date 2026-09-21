@@ -19,20 +19,19 @@ import os
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from app.story_engine.content_store import get_story, get_pois
 from app.story_engine.geofence import find_triggered_waypoint, route_progress_fraction
-from app.story_engine.live_share import is_valid_rider_id, live_position_store
+from app.story_engine.live_share import RIDER_ID_PATTERN, live_position_store
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
 app = FastAPI(title="Kasi Compass — Train Journey Mapper (lab integration)")
 
-# Same UUID shape as live_share.RIDER_ID_PATTERN, exposed as a plain pattern
-# string so Pydantic can validate it as part of the request schema.
-UUID_RIDER_ID_PATTERN = (
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
+# Reuse live_share's pattern verbatim (as a plain string) so the UUID shape
+# enforced at the request schema and the one enforced in the store can never
+# drift apart.
+UUID_RIDER_ID_PATTERN = RIDER_ID_PATTERN.pattern
 
 # Frontend (GitHub Pages) and backend (Render) are deployed as separate
 # origins, so the browser enforces CORS on every request between them.
@@ -141,21 +140,12 @@ class RiderIdQuery(BaseModel):
     # for why rider_id is deliberately opaque (no name, no session, no
     # link to anything else about the rider).
     #
-    # The pattern validator makes the UUID shape part of the request schema,
-    # so a malformed 36-character id is rejected with a 422 at validation
-    # time rather than slipping past a length-only check and only failing
-    # later in is_valid_rider_id.
-    rider_id: str = Field(pattern=UUID_RIDER_ID_PATTERN)
+        # The pattern is part of the request schema, so a malformed 36-character
+        # id is rejected with a 422 at validation time — this is the single source
+        # of UUID validation for every rider_id-taking endpoint.
+        rider_id: str = Field(pattern=UUID_RIDER_ID_PATTERN)
 
-    @field_validator("rider_id")
-    @classmethod
-    def _check_rider_id(cls, value: str) -> str:
-        if not is_valid_rider_id(value):
-            raise ValueError("rider_id must be a UUID")
-        return value
-
-
-class SharePositionRequest(RiderIdQuery):
+    class SharePositionRequest(RiderIdQuery):
     lat: float
     lon: float
 
@@ -171,11 +161,6 @@ class SharedRiderPosition(BaseModel):
     seconds_ago: float
 
 
-def _validate_rider_id(rider_id: str) -> None:
-    if not is_valid_rider_id(rider_id):
-        raise HTTPException(status_code=422, detail="rider_id must be a UUID")
-
-
 @app.post("/journey/share-position", response_model=SharePositionResponse)
 def share_position(payload: SharePositionRequest) -> SharePositionResponse:
     """
@@ -184,7 +169,6 @@ def share_position(payload: SharePositionRequest) -> SharePositionResponse:
     position is fuzzed to a ~150m grid cell before it ever touches memory
     — see live_share.fuzz_coordinate. Nothing here is written to disk.
     """
-    _validate_rider_id(payload.rider_id)
     _validate_coordinates(payload.lat, payload.lon)
 
     count = live_position_store.share_position(payload.rider_id, payload.lat, payload.lon)
@@ -202,7 +186,6 @@ def shared_positions(
     to identify "not me" in the results, whether or not that rider is
     themselves sharing.
     """
-    _validate_rider_id(rider_id)
     positions = live_position_store.get_other_positions(rider_id)
     return [SharedRiderPosition(**p) for p in positions]
 
@@ -217,5 +200,4 @@ def leave_shared_position(payload: SharePositionRequest) -> None:
     Reuses SharePositionRequest purely for its rider_id field; lat/lon are
     ignored here.
     """
-    _validate_rider_id(payload.rider_id)
     live_position_store.leave(payload.rider_id)
