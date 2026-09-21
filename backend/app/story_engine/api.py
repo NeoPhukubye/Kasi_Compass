@@ -140,12 +140,12 @@ class RiderIdQuery(BaseModel):
     # for why rider_id is deliberately opaque (no name, no session, no
     # link to anything else about the rider).
     #
-        # The pattern is part of the request schema, so a malformed 36-character
-        # id is rejected with a 422 at validation time — this is the single source
-        # of UUID validation for every rider_id-taking endpoint.
-        rider_id: str = Field(pattern=UUID_RIDER_ID_PATTERN)
+    # The pattern is part of the request schema, so a malformed 36-character
+    # id is rejected with a 422 at validation time — this is the single source
+    # of UUID validation for every rider_id-taking endpoint.
+    rider_id: str = Field(pattern=UUID_RIDER_ID_PATTERN)
 
-    class SharePositionRequest(RiderIdQuery):
+class SharePositionRequest(RiderIdQuery):
     lat: float
     lon: float
 
