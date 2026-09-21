@@ -202,220 +202,143 @@ function startCompanionTracking() {
     }
 }
 
-// Named callback for a single GPS update: resolve the story/progress for the
-// current position, redraw the map, and (if sharing is on) push the position
-// to the backend.
-async function handleCompanionPosition(position) {
-    const { latitude, longitude } = position.coords;
-    els.gpsStatus.textContent = `GPS active: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-
-    const requestToken = ++latestPositionRequest;
-
-    try {
-        const result = await fetchPosition(latitude, longitude, currentLanguage);
-
-        // A newer GPS fix arrived while this request was in flight — discard
-        // this stale response so an older position can't overwrite newer UI.
-        if (requestToken !== latestPositionRequest) return;
-
-        const alongTrack = alongTrackProgress(latitude, longitude, waypoints);
-        const progress = alongTrack !== null
-            ? alongTrack
-            : result.route_progress_fraction;
-
-        if (result.triggered && result.story_text) {
-            showStoryCard(result);
-        }
-        updateTrainPosition(progress);
-        updateProgressUI(progress);
-
-        if (sharingPosition) {
-            // Await the share so updates are sent in order, but don't let a
-            // slow/failed share block the GPS redraw that already happened.
-            sharePositionForCompanion(latitude, longitude);
-        }
-    } catch (err) {
-        console.error('Failed to fetch position:', err);
-    }
-}
-
-// Send the current position to the sharing endpoint, skipping the request if
-// one is already in flight (a fast-moving rider can otherwise stack them).
-// Consecutive failures are surfaced in the share status line.
-function sharePositionForCompanion(lat, lon) {
-    if (shareInFlight) return shareInFlight;
-
-    shareInFlight = shareMyPosition(lat, lon)
-        .then(() => {
-            consecutiveShareFailures = 0;
-        })
-        .catch(err => {
-            consecutiveShareFailures += 1;
-            console.error('Failed to share position:', err);
-            if (consecutiveShareFailures === 3) {
-                els.shareStatus.textContent = 'Having trouble sharing your position — check your connection';
-            }
-            return null;
-        })
-        .finally(() => {
-            shareInFlight = null;
-        });
-
-    return shareInFlight;
-}
-
 function stopCompanionTracking() {
     if (companionWatchId !== null) {
         navigator.geolocation.clearWatch(companionWatchId);
         companionWatchId = null;
     }
-    els.btnGps.textContent = 'Start GPS Tracking';
     els.gpsStatus.textContent = 'GPS inactive';
+    els.btnGps.textContent = 'Start GPS Tracking';
 
-    // Sharing only makes sense while GPS tracking is actually running —
-    // stopping GPS always stops sharing too, regardless of the toggle's
-    // last state, so a rider's position never keeps broadcasting after
-    // they've turned tracking off.
     if (sharingPosition) {
         els.shareToggle.checked = false;
-        disableSharing();
+        onShareToggleChanged();
     }
-
-    updateProgressUI(0);
 }
 
-async function onShareToggleChanged() {
-    if (els.shareToggle.checked) {
-        if (companionWatchId === null) {
-            // Sharing without GPS running has nothing to share — guard
-            // against the checkbox being toggled before "Start GPS
-            // Tracking" is pressed.
-            els.shareToggle.checked = false;
-            els.shareStatus.textContent = 'Start GPS tracking first';
-            return;
+async function handleCompanionPosition(position) {
+    const { latitude, longitude, accuracy } = position.coords;
+    const thisRequest = ++latestPositionRequest;
+
+    els.gpsStatus.textContent = `GPS active (accuracy: ${accuracy.toFixed(0)}m)`;
+
+    try {
+        const result = await fetchPosition(latitude, longitude, currentLanguage);
+
+        if (thisRequest === latestPositionRequest) {
+            updateTrainPosition(result.route_progress_fraction);
+            onProgressUpdate(result.route_progress_fraction);
+
+            if (result.triggered && result.story_text) {
+                showStoryCard(result);
+            }
         }
-        enableSharing();
-    } else {
-        await disableSharing();
+    } catch (err) {
+        console.error('Failed to fetch position:', err);
+        els.gpsStatus.textContent = 'Error fetching position';
     }
-}
 
-function enableSharing() {
-    sharingPosition = true;
-    consecutiveShareFailures = 0;
-    els.shareStatus.textContent = 'Sharing your position with nearby riders';
-
-    if (sharedPositionsInterval) return;
-    sharedPositionsInterval = setInterval(async () => {
-        try {
-            const others = await fetchSharedPositions();
-            renderOtherRiders(others);
-        } catch (err) {
-            console.error('Failed to fetch shared positions:', err);
-        }
-    }, 10000);
-}
-
-async function disableSharing() {
-    sharingPosition = false;
-    consecutiveShareFailures = 0;
-    els.shareStatus.textContent = 'Not sharing';
-
-    if (sharedPositionsInterval) {
-        clearInterval(sharedPositionsInterval);
-        sharedPositionsInterval = null;
+    if (sharingPosition) {
+        shareLivePosition(latitude, longitude);
     }
-    clearOtherRiders();
-    await stopSharingPosition();
 }
 
 function onProgressUpdate(progress) {
-    updateProgressUI(progress);
-}
-
-function updateProgressUI(progress) {
-    const percent = Math.round(progress * 100);
-    els.progressFill.style.width = `${percent}%`;
-
-    if (els.progressBar) {
-        els.progressBar.setAttribute('aria-valuenow', String(percent));
-    }
-
-    if (progress <= 0) {
-        els.progressText.textContent = 'Ready to begin';
-    } else if (progress >= 1) {
-        els.progressText.textContent = 'Journey complete!';
-    } else {
-        const waypoint = waypointAtProgress(progress, waypoints);
-        els.progressText.textContent = waypoint
-            ? `Approaching ${waypoint.name}...`
-            : `Journey progress: ${percent}%`;
-    }
+    currentProgress = progress;
+    const percentage = (progress * 100).toFixed(1);
+    els.progressFill.style.width = `${percentage}%`;
+    els.progressText.textContent = `Journey progress: ${percentage}%`;
+    els.progressBar.setAttribute('aria-valuenow', percentage);
 }
 
 function onJourneyComplete() {
+    clearExplorerInterval();
+    stopAnimation();
     els.btnStart.disabled = false;
     els.btnStart.textContent = 'Start Journey';
     els.btnPause.disabled = true;
-    if (explorerInterval) {
-        clearInterval(explorerInterval);
-        explorerInterval = null;
-    }
+    els.progressText.textContent = 'Journey complete!';
 }
 
-function onWaypointClick(waypoint) {
-    const idx = waypoints.indexOf(waypoint);
-    if (idx === -1) return;
-
-    if (waypoints.length < 2) {
-        setProgress(0);
-        return;
-    }
-
-    setProgress(idx / (waypoints.length - 1));
-}
-
-function showStoryCard(data) {
+async function showStoryCard(data) {
     lastFocusedElement = document.activeElement;
-    els.storyTitle.textContent = data.waypoint_name || 'Stop';
-    els.storyText.textContent = data.story_text || '';
-    els.storySource.textContent = data.story_source ? `Source: ${data.story_source}` : '';
+
+    els.storyTitle.textContent = data.waypoint_name;
+    els.storyText.textContent = data.story_text;
+    els.storySource.textContent = `Source: ${data.story_source}`;
     els.storyCard.classList.remove('hidden');
-    els.storyCard.setAttribute('aria-hidden', 'false');
+    els.closeStory.focus();
 
-    fetchPOIs(data.waypoint_id)
-        .then(pois => {
-            // Build the list with DOM nodes + textContent rather than an
-            // innerHTML template, so a POI name can never be interpreted as
-            // markup (e.g. a name containing "<script>").
-            els.poiList.replaceChildren();
-            pois.forEach(p => {
-                const li = document.createElement('li');
-                const nameSpan = document.createElement('span');
-                nameSpan.textContent = p.name;
-                const typeSpan = document.createElement('span');
-                typeSpan.className = 'poi-type';
-                typeSpan.textContent = p.type;
-                li.append(nameSpan, ' ', typeSpan);
-                els.poiList.appendChild(li);
-            });
-            els.storyPois.classList.remove('hidden');
-        })
-        .catch(() => {
+    if (data.waypoint_id) {
+        try {
+            const pois = await fetchPois(data.waypoint_id);
+            if (pois.length > 0) {
+                els.storyPois.classList.remove('hidden');
+                els.poiList.innerHTML = pois
+                    .map(
+                        (p) => `
+                    <li>
+                        <strong>${p.name}</strong> (${p.type})
+                        ${p.description ? `<br><span class="poi-description">${p.description}</span>` : ''}
+                    </li>
+                `
+                    )
+                    .join('');
+            } else {
+                els.storyPois.classList.add('hidden');
+            }
+        } catch (err) {
+            console.error('Failed to fetch POIs:', err);
             els.storyPois.classList.add('hidden');
-        });
-
-    setTimeout(() => {
-        els.closeStory.focus();
-    }, 100);
+        }
+    } else {
+        els.storyPois.classList.add('hidden');
+    }
 }
 
 function hideStoryCard() {
     els.storyCard.classList.add('hidden');
-    els.storyCard.setAttribute('aria-hidden', 'true');
-    if (lastFocusedElement) {
-        lastFocusedElement.focus();
+}
+
+async function onWaypointClick(waypoint) {
+    try {
+        const result = await fetchPosition(waypoint.lat, waypoint.lon, currentLanguage);
+        if (result.triggered && result.story_text) {
+            showStoryCard(result);
+        }
+    } catch (err) {
+        console.error('Failed to fetch position for waypoint:', err);
     }
+}
+
+function onShareToggleChanged() {
+    sharingPosition = els.shareToggle.checked;
+    if (sharingPosition) {
+        startPositionSharing();
+    } else {
+        stopPositionSharing();
+    }
+}
+
+function startPositionSharing() {
+    els.shareStatus.textContent = 'Sharing...';
+    if (sharedPositionsInterval) clearInterval(sharedPositionsInterval);
+    sharedPositionsInterval = setInterval(fetchSharedPositions, 5000);
+    fetchSharedPositions();
+}
+
+function stopPositionSharing() {
+    els.shareStatus.textContent = 'Not sharing';
+    if (shareInFlight) {
+        shareInFlight.abort();
+        shareInFlight = null;
+    }
+    if (sharedPositionsInterval) {
+        clearInterval(sharedPositionsInterval);
+        sharedPositionsInterval = null;
+    }
+    clearSharedPositionMarkers();
+    leaveLiveShare();
 }
 
 document.addEventListener('DOMContentLoaded', init);
