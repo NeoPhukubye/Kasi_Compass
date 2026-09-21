@@ -6,6 +6,16 @@ let lastFocusedElement = null;
 let sharingPosition = false;
 let sharedPositionsInterval = null;
 
+// Tracks an in-flight share request and how many consecutive share failures
+// we've seen, so repeated failures can be surfaced in the UI rather than
+// only logged to the console.
+let shareInFlight = null;
+let consecutiveShareFailures = 0;
+
+// Monotonic token identifying the most recent companion GPS request, so a
+// slow earlier response can't overwrite a newer position/progress reading.
+let latestPositionRequest = 0;
+
 const els = {
     btnExplorer: document.getElementById('btn-explorer'),
     btnCompanion: document.getElementById('btn-companion'),
@@ -105,11 +115,15 @@ async function loadRoute() {
     }
 }
 
-function startExplorerJourney() {
+function clearExplorerInterval() {
     if (explorerInterval) {
         clearInterval(explorerInterval);
         explorerInterval = null;
     }
+}
+
+function startExplorerJourney() {
+    clearExplorerInterval();
 
     resetJourney();
     els.btnStart.disabled = true;
@@ -134,10 +148,7 @@ function startExplorerJourney() {
 }
 
 function pauseExplorerJourney() {
-    if (explorerInterval) {
-        clearInterval(explorerInterval);
-        explorerInterval = null;
-    }
+    clearExplorerInterval();
 
     if (isAnimating) {
         stopAnimation();
@@ -153,12 +164,6 @@ function updateSpeed() {
     els.speedValue.textContent = `${speed}x`;
     els.speedSlider.setAttribute('aria-valuenow', String(speed));
 }
-
-// Tracks an in-flight share request and how many consecutive share failures
-// we've seen, so repeated failures can be surfaced in the UI rather than
-// only logged to the console.
-let shareInFlight = null;
-let consecutiveShareFailures = 0;
 
 async function toggleCompanionMode() {
     if (companionWatchId !== null) {
@@ -204,8 +209,15 @@ async function handleCompanionPosition(position) {
     const { latitude, longitude } = position.coords;
     els.gpsStatus.textContent = `GPS active: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
 
+    const requestToken = ++latestPositionRequest;
+
     try {
         const result = await fetchPosition(latitude, longitude, currentLanguage);
+
+        // A newer GPS fix arrived while this request was in flight — discard
+        // this stale response so an older position can't overwrite newer UI.
+        if (requestToken !== latestPositionRequest) return;
+
         const alongTrack = alongTrackProgress(latitude, longitude, waypoints);
         const progress = alongTrack !== null
             ? alongTrack
@@ -290,6 +302,7 @@ async function onShareToggleChanged() {
 
 function enableSharing() {
     sharingPosition = true;
+    consecutiveShareFailures = 0;
     els.shareStatus.textContent = 'Sharing your position with nearby riders';
 
     if (sharedPositionsInterval) return;
@@ -305,6 +318,7 @@ function enableSharing() {
 
 async function disableSharing() {
     sharingPosition = false;
+    consecutiveShareFailures = 0;
     els.shareStatus.textContent = 'Not sharing';
 
     if (sharedPositionsInterval) {
