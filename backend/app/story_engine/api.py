@@ -60,7 +60,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 class JourneyPositionResponse(BaseModel):
     triggered: bool
     waypoint_id: str | None = None
@@ -69,7 +68,6 @@ class JourneyPositionResponse(BaseModel):
     route_progress_fraction: float
     story_text: str | None = None
     story_source: str | None = None
-
 
 def _validate_coordinates(lat: float, lon: float) -> None:
     """Reject coordinates that cannot be a real geographic position.
@@ -109,7 +107,6 @@ def journey_position(lat: float, lon: float, language: str = "en") -> JourneyPos
         story_source=story.reviewed_by if story else None,
     )
 
-
 @app.get("/journey/route")
 def journey_route() -> list[dict]:
     """Return the full ordered waypoint list — what the frontend map renders."""
@@ -118,22 +115,17 @@ def journey_route() -> list[dict]:
         for w in PRETORIA_TO_CAPE_TOWN
     ]
 
-
-
-
 class PointOfInterestResponse(BaseModel):
     name: str
     type: str
-
     lat: float
-
     lon: float
+    description: str | None = None
 
 @app.get("/journey/pois", response_model=list[PointOfInterestResponse])
 def journey_pois(waypoint_id: str) -> list[PointOfInterestResponse]:
     """Return nearby shops, markets, fuel, parking, and tourist sites for a stop."""
     return [PointOfInterestResponse(**p.as_dict()) for p in get_pois(waypoint_id)]
-
 
 class RiderIdQuery(BaseModel):
     # UUID-shaped and nothing more — see live_share.py's module docstring
@@ -149,17 +141,14 @@ class SharePositionRequest(RiderIdQuery):
     lat: float
     lon: float
 
-
 class SharePositionResponse(BaseModel):
     active_riders: int
-
 
 class SharedRiderPosition(BaseModel):
     rider_id: str
     lat: float
     lon: float
     seconds_ago: float
-
 
 @app.post("/journey/share-position", response_model=SharePositionResponse)
 def share_position(payload: SharePositionRequest) -> SharePositionResponse:
@@ -173,7 +162,6 @@ def share_position(payload: SharePositionRequest) -> SharePositionResponse:
 
     count = live_position_store.share_position(payload.rider_id, payload.lat, payload.lon)
     return SharePositionResponse(active_riders=count)
-
 
 @app.get("/journey/shared-positions", response_model=list[SharedRiderPosition])
 def shared_positions(
@@ -189,7 +177,6 @@ def shared_positions(
     positions = live_position_store.get_other_positions(rider_id)
     return [SharedRiderPosition(**p) for p in positions]
 
-
 @app.post("/journey/share-position/leave", status_code=204)
 def leave_shared_position(payload: SharePositionRequest) -> None:
     """
@@ -198,6 +185,6 @@ def leave_shared_position(payload: SharePositionRequest) -> None:
     Companion Mode, or closes the tab (via navigator.sendBeacon, which
     only supports POST — hence this being a POST rather than DELETE).
     Reuses SharePositionRequest purely for its rider_id field; lat/lon are
-    ignored here.
+    ignored.
     """
     live_position_store.leave(payload.rider_id)
