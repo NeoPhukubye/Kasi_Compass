@@ -47,7 +47,7 @@ class PointOfInterest:
     type: str  # "market", "shop", "restaurant", "tourist_attraction", "fuel", "parking"
     lat: float
     lon: float
-    def as_dict(self) -> dict:
+    def as_dict(self) -> dict[str, str | float]:
         """Plain-dict form of this POI for the API response model."""
         return {"name": self.name, "type": self.type, "lat": self.lat, "lon": self.lon}
 
