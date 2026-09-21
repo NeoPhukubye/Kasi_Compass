@@ -77,11 +77,11 @@ function projectOntoSegment(lat, lon, aLat, aLon, bLat, bLon) {
 // can ever do. Still a client-side approximation for animation and
 // "approaching X" hints only — backend geofence.py remains the single source
 // of truth for which waypoint actually triggers a story.
-function alongTrackProgress(lat, lon, routeWaypoints) {
-    if (!routeWaypoints || routeWaypoints.length < 2) return null;
-
-    // Cumulative geodesic length up to each waypoint, so a projection's
-    // distance-into-segment can be converted into distance-along-route.
+// Cumulative geodesic length up to each waypoint, so a projection's
+// distance-into-segment can be converted into distance-along-route.
+// Returns a list where index i is the distance from the start of the route
+// to waypoint i (with index 0 always 0).
+function cumulativeRouteLengths(routeWaypoints) {
     const cumulative = [0];
     for (let i = 1; i < routeWaypoints.length; i++) {
         const prev = routeWaypoints[i - 1];
@@ -91,6 +91,13 @@ function alongTrackProgress(lat, lon, routeWaypoints) {
             haversineMeters(prev.lat, prev.lon, curr.lat, curr.lon)
         );
     }
+    return cumulative;
+}
+
+function alongTrackProgress(lat, lon, routeWaypoints) {
+    if (!routeWaypoints || routeWaypoints.length < 2) return null;
+
+    const cumulative = cumulativeRouteLengths(routeWaypoints);
     const totalLength = cumulative[cumulative.length - 1];
     if (totalLength === 0) return 0;
 
