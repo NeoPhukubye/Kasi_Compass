@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-
 @dataclass(frozen=True)
 class LocalizedStory:
     language_code: str  # e.g. "en", "zu", "af", "xh"
@@ -33,24 +32,29 @@ class LocalizedStory:
     reviewed_by: str  # who signed off on this specific translation/text
     audio_url: str | None = None
 
-
 @dataclass(frozen=True)
 class WaypointStory:
     waypoint_id: str
     source: str  # who originally contributed this story (person/org, not "AI")
     localized: dict[str, LocalizedStory] = field(default_factory=dict)
 
-
 @dataclass(frozen=True)
 class PointOfInterest:
     name: str
-    type: str  # "market", "shop", "restaurant", "tourist_attraction", "fuel", "parking"
+    type: str  # "market", "shop", "restaurant", "tourist_attraction", "fuel", "parking", "heritage_site"
     lat: float
     lon: float
-    def as_dict(self) -> dict[str, str | float]:
-        """Plain-dict form of this POI for the API response model."""
-        return {"name": self.name, "type": self.type, "lat": self.lat, "lon": self.lon}
+    description: str | None = None
 
+    def as_dict(self) -> dict[str, str | float | None]:
+        """Plain-dict form of this POI for the API response model."""
+        return {
+            "name": self.name,
+            "type": self.type,
+            "lat": self.lat,
+            "lon": self.lon,
+            "description": self.description,
+        }
 
 # Seed content: real waypoints, human-sourced placeholder copy pending
 # actual partner interviews (see WBS Phase 1 — narrator/heritage-site
@@ -92,59 +96,234 @@ STORY_CONTENT: dict[str, WaypointStory] = {
 
 WAYPOINT_POIS: dict[str, list[PointOfInterest]] = {
     "kimberley": [
-        PointOfInterest("Kimberley Big Hole", "tourist_attraction", -28.7353, 24.7697),
-        PointOfInterest("Kimberley Market", "market", -28.7340, 24.7680),
-        PointOfInterest("De Beers Store", "shop", -28.7360, 24.7710),
-        PointOfInterest("Orange Street Fuel", "fuel", -28.7330, 24.7650),
-        PointOfInterest("Kimberley Garage", "parking", -28.7370, 24.7700),
+        PointOfInterest(
+            "Kimberley Big Hole",
+            "heritage_site",
+            -28.7353,
+            24.7697,
+            "One of the largest hand-dug excavations on Earth, a testament to the 19th-century diamond rush.",
+        ),
+        PointOfInterest(
+            "Kimberley Market",
+            "market",
+            -28.7340,
+            24.7680,
+            "A bustling local market with fresh produce and handmade crafts.",
+        ),
+        PointOfInterest(
+            "De Beers Store",
+            "shop",
+            -28.7360,
+            24.7710,
+            "The original store of the famous diamond company.",
+        ),
+        PointOfInterest(
+            "Orange Street Fuel", "fuel", -28.7330, 24.7650, "24/7 fuel and convenience store."
+        ),
+        PointOfInterest(
+            "Kimberley Garage",
+            "parking",
+            -28.7370,
+            24.7700,
+            "Secure parking near the Big Hole.",
+        ),
     ],
     "matjiesfontein": [
-        PointOfInterest("Matjiesfontein Village Shop", "shop", -33.2167, 20.5833),
-        PointOfInterest("Karoo Heritage Market", "market", -33.2155, 20.5845),
-        PointOfInterest("Station Fuel Stop", "fuel", -33.2175, 20.5820),
-        PointOfInterest("Village Parking", "parking", -33.2180, 20.5810),
-        PointOfInterest("Old Hotel Restaurant", "restaurant", -33.2160, 20.5850),
+        PointOfInterest(
+            "Matjiesfontein Village Shop",
+            "shop",
+            -33.2167,
+            20.5833,
+            "A charming shop in a Victorian-era village, frozen in time.",
+        ),
+        PointOfInterest(
+            "Karoo Heritage Market",
+            "market",
+            -33.2155,
+            20.5845,
+            "Local crafts and produce from the Karoo region.",
+        ),
+        PointOfInterest(
+            "Station Fuel Stop",
+            "fuel",
+            -33.2175,
+            20.5820,
+            "The only fuel stop in the historic village.",
+        ),
+        PointOfInterest(
+            "Village Parking",
+            "parking",
+            -33.2180,
+            20.5810,
+            "Ample parking for visitors exploring the village.",
+        ),
+        PointOfInterest(
+            "Old Hotel Restaurant",
+            "restaurant",
+            -33.2160,
+            20.5850,
+            "Dine in a historic hotel with classic Karoo cuisine.",
+        ),
     ],
     "pretoria": [
-        PointOfInterest("Union Buildings", "tourist_attraction", -25.7479, 28.2293),
-        PointOfInterest("Pretoria Market", "market", -25.7465, 28.2305),
-        PointOfInterest("Capital Park Shop", "shop", -25.7485, 28.2280),
-        PointOfInterest("Station Fuel", "fuel", -25.7490, 28.2270),
+        PointOfInterest(
+            "Union Buildings",
+            "heritage_site",
+            -25.7479,
+            28.2293,
+            "The official seat of the South African Government, with beautiful terraced gardens.",
+        ),
+        PointOfInterest(
+            "Pretoria Market",
+            "market",
+            -25.7465,
+            28.2305,
+            "A large market with a variety of goods, from food to clothing.",
+        ),
+        PointOfInterest(
+            "Capital Park Shop",
+            "shop",
+            -25.7485,
+            28.2280,
+            "A local shop with everyday essentials.",
+        ),
+        PointOfInterest(
+            "Station Fuel", "fuel", -25.7490, 28.2270, "Conveniently located near the station."
+        ),
     ],
     "johannesburg_park": [
-        PointOfInterest("Park Station", "tourist_attraction", -26.1972, 28.0419),
-        PointOfInterest("Johannesburg Market", "market", -26.1960, 28.0430),
-        PointOfInterest("City Centre Shop", "shop", -26.1980, 28.0400),
-        PointOfInterest("Station Fuel", "fuel", -26.1985, 28.0390),
-        PointOfInterest("PnP Parking", "parking", -26.1975, 28.0440),
+        PointOfInterest(
+            "Park Station",
+            "tourist_attraction",
+            -26.1972,
+            28.0419,
+            "The central railway station of Johannesburg, a hub of activity.",
+        ),
+        PointOfInterest(
+            "Johannesburg Market",
+            "market",
+            -26.1960,
+            28.0430,
+            "A vibrant market reflecting the diverse culture of the city.",
+        ),
+        PointOfInterest(
+            "City Centre Shop",
+            "shop",
+            -26.1980,
+            28.0400,
+            "A modern shopping experience in the heart of the city.",
+        ),
+        PointOfInterest(
+            "Station Fuel", "fuel", -26.1985, 28.0390, "Fuel up before heading out of the city."
+        ),
+        PointOfInterest(
+            "PnP Parking",
+            "parking",
+            -26.1975,
+            28.0440,
+            "Secure parking for commuters and shoppers.",
+        ),
     ],
     "de_aar": [
-        PointOfInterest("De Aar Mall", "shop", -30.6508, 24.0133),
-        PointOfInterest("Karoo Market", "market", -30.6495, 24.0145),
-        PointOfInterest("Fuel Station", "fuel", -30.6515, 24.0120),
-        PointOfInterest("Town Parking", "parking", -30.6520, 24.0110),
+        PointOfInterest(
+            "De Aar Mall",
+            "shop",
+            -30.6508,
+            24.0133,
+            "The main shopping center in De Aar, with a variety of stores.",
+        ),
+        PointOfInterest(
+            "Karoo Market",
+            "market",
+            -30.6495,
+            24.0145,
+            "A weekly market with local goods and crafts.",
+        ),
+        PointOfInterest(
+            "Fuel Station", "fuel", -30.6515, 24.0120, "A reliable stop for fuel in the Karoo."
+        ),
+        PointOfInterest(
+            "Town Parking", "parking", -30.6520, 24.0110, "Public parking in the town center."
+        ),
     ],
     "beaufort_west": [
-        PointOfInterest("Beaufort West Mall", "shop", -32.3568, 22.5811),
-        PointOfInterest("Karoo Karoo Market", "market", -32.3555, 22.5825),
-        PointOfInterest("Station Fuel", "fuel", -32.3575, 22.5800),
-        PointOfInterest("Public Parking", "parking", -32.3580, 22.5790),
+        PointOfInterest(
+            "Beaufort West Mall",
+            "shop",
+            -32.3568,
+            22.5811,
+            "A modern mall serving the Central Karoo district.",
+        ),
+        PointOfInterest(
+            "Karoo Karoo Market",
+            "market",
+            -32.3555,
+            22.5825,
+            "A popular spot for local produce and artisanal goods.",
+        ),
+        PointOfInterest(
+            "Station Fuel", "fuel", -32.3575, 22.5800, "Fuel and a quick snack stop."
+        ),
+        PointOfInterest(
+            "Public Parking", "parking", -32.3580, 22.5790, "Free parking near the town center."
+        ),
     ],
     "worcester": [
-        PointOfInterest("Worcester Mall", "shop", -33.6464, 19.4487),
-        PointOfInterest("Breede River Market", "market", -33.6450, 19.4495),
-        PointOfInterest("Fuel Station", "fuel", -33.6475, 19.4470),
-        PointOfInterest("Town Parking", "parking", -33.6480, 19.4460),
+        PointOfInterest(
+            "Worcester Mall",
+            "shop",
+            -33.6464,
+            19.4487,
+            "The largest shopping mall in the Breede River Valley.",
+        ),
+        PointOfInterest(
+            "Breede River Market",
+            "market",
+            -33.6450,
+            19.4495,
+            "A weekend market with local wine, cheese, and crafts.",
+        ),
+        PointOfInterest(
+            "Fuel Station", "fuel", -33.6475, 19.4470, "A 24/7 fuel station."
+        ),
+        PointOfInterest(
+            "Town Parking", "parking", -33.6480, 19.4460, "Paid parking in the town center."
+        ),
     ],
     "cape_town": [
-        PointOfInterest("Cape Town Station", "tourist_attraction", -33.9222, 18.4264),
-        PointOfInterest("City Bowl Market", "market", -33.9210, 18.4275),
-        PointOfInterest("Adderley Shop", "shop", -33.9230, 18.4250),
-        PointOfInterest("Station Fuel", "fuel", -33.9235, 18.4240),
-        PointOfInterest("City Parking", "parking", -33.9240, 18.4230),
+        PointOfInterest(
+            "Cape Town Station",
+            "tourist_attraction",
+            -33.9222,
+            18.4264,
+            "The oldest and largest railway station in Cape Town.",
+        ),
+        PointOfInterest(
+            "City Bowl Market",
+            "market",
+            -33.9210,
+            18.4275,
+            "A foodie market in the heart of the city, with live music.",
+        ),
+        PointOfInterest(
+            "Adderley Shop",
+            "shop",
+            -33.9230,
+            18.4250,
+            "A historic street with a mix of modern and traditional shops.",
+        ),
+        PointOfInterest(
+            "Station Fuel", "fuel", -33.9235, 18.4240, "Conveniently located near the station."
+        ),
+        PointOfInterest(
+            "City Parking",
+            "parking",
+            -33.9240,
+            18.4230,
+            "Multi-level parking garage with easy access to the city center.",
+        ),
     ],
 }
-
 
 def get_story(waypoint_id: str, language_code: str = "en") -> LocalizedStory | None:
     """
@@ -157,7 +336,6 @@ def get_story(waypoint_id: str, language_code: str = "en") -> LocalizedStory | N
     if entry is None:
         return None
     return entry.localized.get(language_code) or entry.localized.get("en")
-
 
 def get_pois(waypoint_id: str) -> list[PointOfInterest]:
     """
