@@ -26,6 +26,7 @@ from app.story_engine.geofence import find_triggered_waypoint, route_progress_fr
 from app.story_engine.live_share import RIDER_ID_PATTERN, live_position_store
 from app.story_engine.memories import (
     DEFAULT_MEMORIES_LIMIT,
+    DEFAULT_NEARBY_RADIUS_METERS,
     memory_store,
 )
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
@@ -200,10 +201,17 @@ class CreateMemoryRequest(RiderIdQuery):
     client-generated, tied to no identity. waypoint_id must be a waypoint
     that actually exists on the route, and text is enforced non-empty and
     length-bounded in the store (see memories.py).
+
+    A memory can optionally be pinned to the exact spot it was left (lat +
+    lon, always together) so later riders passing that spot can unlock it;
+    audio_url is a hosted voice-note link, never raw bytes.
     """
     waypoint_id: str
     text: str
     language_code: str = "en"
+    lat: float | None = None
+    lon: float | None = None
+    audio_url: str | None = None
 
 class MemoryResponse(BaseModel):
     memory_id: str
@@ -212,13 +220,17 @@ class MemoryResponse(BaseModel):
     text: str
     created_at: float
     language_code: str
+    lat: float | None = None
+    lon: float | None = None
+    audio_url: str | None = None
 
 @app.post("/journey/memories", response_model=MemoryResponse, status_code=201)
 def create_memory(payload: CreateMemoryRequest) -> MemoryResponse:
     """
     The "new generation creates new memories" path: store a rider's memory
     at a waypoint. Validation failures (unknown waypoint, blank/oversized
-    text) return 422, matching how malformed rider ids are handled.
+    text, half-provided coordinates) return 422, matching how malformed
+    rider ids are handled.
     """
     try:
         memory = memory_store.add_memory(
@@ -226,6 +238,9 @@ def create_memory(payload: CreateMemoryRequest) -> MemoryResponse:
             rider_id=payload.rider_id,
             text=payload.text,
             language_code=payload.language_code,
+            lat=payload.lat,
+            lon=payload.lon,
+            audio_url=payload.audio_url,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -244,3 +259,20 @@ def list_memories(
     if waypoint_id is not None and waypoint_id not in {w.id for w in PRETORIA_TO_CAPE_TOWN}:
         raise HTTPException(status_code=422, detail=f"unknown waypoint_id: {waypoint_id!r}")
     return [MemoryResponse(**m.as_dict()) for m in memory_store.memories_for(waypoint_id, limit)]
+
+@app.get("/journey/memories/nearby", response_model=list[MemoryResponse])
+def nearby_memories(
+    lat: float,
+    lon: float,
+    radius: float = Query(default=DEFAULT_NEARBY_RADIUS_METERS, ge=1, le=50_000),
+    limit: int = Query(default=DEFAULT_MEMORIES_LIMIT, ge=1, le=100),
+) -> list[MemoryResponse]:
+    """
+    The geofenced relive path: unlock memories that were dropped within
+    `radius` meters of the rider's live position. Mirrors how the story
+    engine triggers on proximity — pass Kimberley station and the memory
+    someone left on the Big Hole platform surfaces, not every memory for
+    the whole town.
+    """
+    _validate_coordinates(lat, lon)
+    return [MemoryResponse(**m.as_dict()) for m in memory_store.memories_near(lat, lon, radius, limit)]
