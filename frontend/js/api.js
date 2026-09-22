@@ -56,3 +56,15 @@ async function askGuide(question) {
     }
     return response.json();
 }
+
+async function companionChat(prompt, stopContext = "Shosholoza Route Station Stop") {
+    const response = await fetch(`${API_BASE}/story-engine/companion/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, stop_context: stopContext }),
+    });
+    if (!response.ok) {
+        throw new Error(`Companion chat request failed: ${response.statusText}`);
+    }
+    return response.json();
+}
