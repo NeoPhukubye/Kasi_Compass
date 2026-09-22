@@ -1,24 +1,39 @@
 """
-AI-powered endpoints for Kasi Compass.
+Companion Mode "Gemini tour guide" — POST /story-engine/companion/chat.
 
-This module is separate from api.py so the core runtime API remains
-independent of any AI service (Gemini, etc.). The test
-`test_runtime_api_does_not_import_the_ai_tool` enforces this separation.
+Kept in its own module and mounted lazily by api.py so the core runtime
+API never imports a vendor SDK at module level (see
+test_runtime_api_does_not_import_the_ai_tool in test_translation_tool.py).
 
-Include this router only when AI functionality is desired.
+Behavior:
+
+  1. With no GEMINI_API_KEY configured, the endpoint answers 503 with a
+     clear message. The guide is an opt-in, key-gated surface.
+  2. With a key, the question is sent to Gemini through the modern
+     `google-genai` client for a live tour-guide answer.
+  3. Any SDK or upstream failure surfaces as a 500 carrying the underlying
+     error, so Render logs show exactly what went wrong.
+
+The API key lives only in backend environment variables, never in browser JS.
 """
 
+from __future__ import annotations
+
 import os
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 try:
-    import google.generativeai as genai
+    from google import genai
+
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
 
 ai_router = APIRouter(prefix="/story-engine", tags=["Story Engine — AI"])
+
+DEFAULT_MODEL = "gemini-2.0-flash"
 
 
 class CompanionChatRequest(BaseModel):
@@ -35,25 +50,37 @@ class CompanionChatResponse(BaseModel):
 def companion_chat(request: CompanionChatRequest) -> CompanionChatResponse:
     """Dynamically query Gemini as an expert tour guide for the Kasi Compass route."""
     if not GENAI_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Google Generative AI SDK not installed on backend")
+        raise HTTPException(
+            status_code=503,
+            detail="Google GenAI SDK not installed on backend (pip install google-genai)",
+        )
 
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured on backend")
 
+    system_instruction = (
+        "You are an expert, culturally rich local tour guide for Kasi Compass, "
+        "a project celebrating the Shosholoza rail route from Johannesburg to Cape Town. "
+        "You blend historical facts, railway nostalgia for older generations, and vibrant township gig culture "
+        "and local stalls for younger generations. Keep answers engaging, informative, and concise."
+    )
+
+    full_prompt = (
+        f"{system_instruction}\n\n"
+        f"Context Location/Stop: {request.stop_context}\n"
+        f"User Question: {request.prompt}"
+    )
+
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        system_instruction = (
-            "You are an expert, culturally rich local tour guide for Kasi Compass, "
-            "a project celebrating the Shosholoza rail route from Johannesburg to Cape Town. "
-            "You blend historical facts, railway nostalgia for older generations, and vibrant township gig culture "
-            "and local stalls for younger generations. Keep answers engaging, informative, and concise."
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=DEFAULT_MODEL,
+            contents=full_prompt,
         )
-
-        full_prompt = f"{system_instruction}\n\nContext Location/Stop: {request.stop_context}\nUser Question: {request.prompt}"
-        response = model.generate_content(full_prompt)
-
         return CompanionChatResponse(status="success", reply=response.text)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI guide generation failed: {str(e)}")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI guide generation failed: {str(exc)}",
+        ) from exc
