@@ -21,9 +21,13 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from app.story_engine.content_store import get_story, get_pois
+from app.story_engine.content_store import get_story, get_story_source, get_pois
 from app.story_engine.geofence import find_triggered_waypoint, route_progress_fraction
 from app.story_engine.live_share import RIDER_ID_PATTERN, live_position_store
+from app.story_engine.memories import (
+    DEFAULT_MEMORIES_LIMIT,
+    memory_store,
+)
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
 app = FastAPI(title="Kasi Compass — Train Journey Mapper (lab integration)")
@@ -104,7 +108,7 @@ def journey_position(lat: float, lon: float, language: str = "en") -> JourneyPos
         distance_meters=round(trigger.distance_meters, 1),
         route_progress_fraction=progress,
         story_text=story.text if story else None,
-        story_source=story.reviewed_by if story else None,
+        story_source=get_story_source(trigger.waypoint.id),
     )
 
 @app.get("/journey/route")
@@ -188,3 +192,55 @@ def leave_shared_position(payload: SharePositionRequest) -> None:
     ignored.
     """
     live_position_store.leave(payload.rider_id)
+
+class CreateMemoryRequest(RiderIdQuery):
+    """
+    A rider dropping a memory at a waypoint they've just passed. The same
+    opaque UUID rules as living sharing: rider_id is anonymous and
+    client-generated, tied to no identity. waypoint_id must be a waypoint
+    that actually exists on the route, and text is enforced non-empty and
+    length-bounded in the store (see memories.py).
+    """
+    waypoint_id: str
+    text: str
+    language_code: str = "en"
+
+class MemoryResponse(BaseModel):
+    memory_id: str
+    waypoint_id: str
+    rider_id: str
+    text: str
+    created_at: float
+    language_code: str
+
+@app.post("/journey/memories", response_model=MemoryResponse, status_code=201)
+def create_memory(payload: CreateMemoryRequest) -> MemoryResponse:
+    """
+    The "new generation creates new memories" path: store a rider's memory
+    at a waypoint. Validation failures (unknown waypoint, blank/oversized
+    text) return 422, matching how malformed rider ids are handled.
+    """
+    try:
+        memory = memory_store.add_memory(
+            waypoint_id=payload.waypoint_id,
+            rider_id=payload.rider_id,
+            text=payload.text,
+            language_code=payload.language_code,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return MemoryResponse(**memory.as_dict())
+
+@app.get("/journey/memories", response_model=list[MemoryResponse])
+def list_memories(
+    waypoint_id: str | None = None,
+    limit: int = Query(default=DEFAULT_MEMORIES_LIMIT, ge=1, le=100),
+) -> list[MemoryResponse]:
+    """
+    The "older generation relives old memories" path: return rider memories
+    for a waypoint (or across the whole route if waypoint_id is omitted),
+    newest first. An unknown waypoint_id is a 422, not a silent empty list.
+    """
+    if waypoint_id is not None and waypoint_id not in {w.id for w in PRETORIA_TO_CAPE_TOWN}:
+        raise HTTPException(status_code=422, detail=f"unknown waypoint_id: {waypoint_id!r}")
+    return [MemoryResponse(**m.as_dict()) for m in memory_store.memories_for(waypoint_id, limit)]
