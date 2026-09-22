@@ -401,6 +401,33 @@ def test_geofence_verify_rejects_invalid_coordinates_and_radius():
     )
     assert zero_radius.status_code == 422
 
+def test_route_guide_answers_from_corpus_without_ai_key():
+    response = client.post("/story-engine/ask", json={"question": "What happened at Kimberley?"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "route-corpus"
+    assert body["ai_used"] is False
+    assert body["stop_id"] == "kimberley"
+    assert body["stop_name"] == "Kimberley Station"
+    assert "Big Hole" in body["answer"]
+
+
+def test_route_guide_gives_overview_for_unrelated_question():
+    response = client.post("/story-engine/ask", json={"question": "what should I pack?"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "route-corpus"
+    assert body["stop_id"] is None
+    assert "Pretoria" in body["answer"]
+
+
+def test_route_guide_rejects_blank_and_oversized_questions():
+    blank = client.post("/story-engine/ask", json={"question": "   "})
+    assert blank.status_code == 422
+
+    oversized = client.post("/story-engine/ask", json={"question": "x" * 501})
+    assert oversized.status_code == 422
+
 
 def test_story_source_is_the_contributor_not_the_reviewer():
     kimberley = get_waypoint("kimberley")
