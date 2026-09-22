@@ -608,6 +608,61 @@ STOP_COORDINATES.update(
     }
 )
 
+# Decade-by-decade evolution narratives for the Time Machine feature.
+# Each stop has eras: 1970, 1990, 2023 (present day).
+TIMELINE_EVOLUTION: dict[str, dict[str, str]] = {
+    "pretoria": {
+        "1970": "Pretoria Station in the 1970s thrummed with steam-era locomotives and the clatter of goods trains feeding the capital's industrial heart. The iconic Herbert Baker building presided over platforms busy with migrant workers and civil servants, while jacarandas bloomed purple along the approach roads each spring.",
+        "1990": "By the 1990s, diesel-electric traction dominated the Pretoria lines. The station forecourt saw a surge of informal traders selling vetkoek and newspapers to commuters navigating the transition era. The Capital Park workshops still echoed with the rhythm of heavy maintenance, though their workforce was shifting.",
+        "2023": "Today, Pretoria Station blends its grand sandstone heritage with modern Gautrain connections and a vibrant vendor precinct. The jacarandas still rain purple petals onto platforms where tourists and daily commuters mingle, and the Union Buildings glow on the hill above a city in constant motion.",
+    },
+    "johannesburg_park": {
+        "1970": "Park Station in the 1970s was a colossal steam-and-smoke cathedral, the gateway for millions of migrant workers arriving from across Southern Africa. The air smelled of coal, braai smoke from platform vendors, and the urgent rhythm of a city built on gold. Platform canopies sheltered crowds carrying cardboard suitcases and dreams.",
+        "1990": "The 1990s brought the first Metrorail EMUs and a tidal wave of commuters as townships swelled. Informal trading exploded along the concourses — amagwinya, newspapers, airtime — while the station's Victorian bones strained under passenger numbers never imagined by its Edwardian architects.",
+        "2023": "Today, Park Station is Africa's busiest rail hub, a multi-level maze where Gautrain, Metrorail, and long-distance Shosholoza Meyl converge. The historic main concourse has been restored, and the surrounding precinct pulses with street art, markets, and the relentless energy of Johannesburg's newest generation.",
+    },
+    "germiston": {
+        "1970": "Germiston in the 1970s was the beating heart of South Africa's railway network — its marshalling yards among the largest on Earth. Endless strings of ore wagons from the gold mines rattled through day and night, sorted by armies of shunters. The station hummed with the industrial might of the Reef.",
+        "1990": "By the 1990s, the great yards had begun to quieten as containerisation and road freight took their toll. Yet the station remained a vital crossroads, and the taxi ranks outside buzzed with the new economy — minibus taxis replacing the old municipal buses, traders adapting to changing commuter flows.",
+        "2023": "Today, Germiston Station stands as a monument to a golden age of rail. The yards are quieter, but the station still serves thousands of daily commuters. Heritage steam tours occasionally revive the ghosts of the past, while local vendors keep the platform economy alive with township staples and quick bites.",
+    },
+    "kimberley": {
+        "1970": "In the 1970s, Kimberley's station precinct buzzed with heavy industrial rail traffic, diamond-mining freight transit, and classic steam and early-diesel locomotives serving the Northern Cape corridor. The Big Hole loomed over a town still defined by its mineral revolution.",
+        "1990": "By the 1990s, passenger migration surged around the station, informal trading stalls began taking root near the platform exits, and the transition toward modern commuter logistics took shape. The diamond museum attracted its first heritage tourists.",
+        "2023": "Today, it blends rich diamond-rush heritage with vibrant local vendor hubs, serving as a historic tourism gateway alongside modern township transport. Craft markets on the platform sell beadwork and souvenirs to visitors arriving on the Shosholoza Meyl.",
+    },
+    "klerksdorp": {
+        "1970": "Klerksdorp Station in the 1970s was a gold-mining frontier outpost on the mainline to the Cape. Steam locomotives took on water here while miners' trains discharged shift workers into a town built on the reef. The station restaurant served hearty plates to railwaymen and miners alike.",
+        "1990": "The 1990s saw the decline of steam and the rise of air-conditioned long-distance coaches. The station became a quieter waypoint, but the town centre vendors near the forecourt kept serving mogodu and pap to travellers and locals navigating the changing economy.",
+        "2023": "Today, Klerksdorp Station is a modest stop on the Shosholoza Meyl route, its platforms echoing with memories of the gold rush. The town centre market thrives, and the station forecourt hosts traders selling everything from fresh produce to mobile accessories.",
+    },
+    "de_aar": {
+        "1970": "De Aar in the 1970s was the great Karoo railway junction — a 24-hour hive of steam activity where engines were serviced, crews changed, and the silence of the Karoo met the constant hubbub of passing trains. The running sheds glowed through the night, a beacon in the vast semi-desert.",
+        "1990": "By the 1990s, the junction's strategic importance faded with dieselisation and route rationalisation. The massive yards fell quiet, but the station remained a lifeline for the town, and the weekly Karoo market beside the platforms became a social anchor for the community.",
+        "2023": "Today, De Aar Station is a peaceful Karoo stop where the Shosholoza Meyl pauses briefly. The old running sheds stand as silent monuments, while the station market offers Karoo lamb, crafts, and the famous hospitality of the Great Karoo to passing travellers.",
+    },
+    "beaufort_west": {
+        "1970": "Beaufort West in the 1970s was the gateway to the Karoo National Park and a vital watering stop for steam locomotives crossing the great thirst. The Victorian station building hosted travellers in its dining room, while outside, the Karoo wind whispered across platforms built for an empire's trains.",
+        "1990": "The 1990s brought the end of steam regular working and a quieter station. Yet Beaufort West remained the Karoo's oldest town, and its town hall — South Africa's oldest — still watched over a station where the occasional diesel-hauled train broke the vast silence.",
+        "2023": "Today, Beaufort West Station welcomes tourists bound for the Karoo National Park and passengers on the scenic Shosholoza Meyl. The historic station building houses a small railway museum, and local artisans sell Karoo crafts on the platform where steam giants once hissed.",
+    },
+    "matjiesfontein": {
+        "1970": "Matjiesfontein in the 1970s was a perfectly preserved Victorian time capsule, its gas lamps still flickering on platforms where the Cape mail train paused for refreshments. The Lord Milner Hotel served high tea to travellers stepping into a world seemingly untouched by the 20th century.",
+        "1990": "By the 1990s, the village had become a declared heritage site. The station remained a mandatory refreshment stop for the Blue Train, and tourists marvelled at the authenticity of a place where the 19th century never really ended. The village shop stocked curios alongside essentials.",
+        "2023": "Today, Matjiesfontein Station is a living museum where the Shosholoza Meyl and Blue Train still pause. The gas lamps still glow, the hotel still serves high tea, and the village shop offers travellers a genuine step back in time — one of South Africa's most unique railway experiences.",
+    },
+    "worcester": {
+        "1970": "Worcester in the 1970s was the gateway to the Hex River Valley pass — the dramatic mountain railway where steam locomotives battled the 1:40 gradients. The station bustled with fruit traffic from the Breede River Valley, and banking engines waited in the sidings for the climb ahead.",
+        "1990": "The 1990s saw the electrification of the Hex River pass and the end of steam banking. The station's role shifted to serving the growing Winelands tourism and commuter traffic. The Breede River Market began to take shape as a weekend destination for Capetonians.",
+        "2023": "Today, Worcester Station is a modern hub for the Cape Winelands. The dramatic Hex River Valley pass is now traversed by electric locomotives, and the station connects tourists to wine routes, while the weekend market overflows with valley produce, wine, and crafts.",
+    },
+    "cape_town": {
+        "1970": "Cape Town Station in the 1970s was the grand terminus where the Blue Train and Trans-Karoo Express ended their journeys beneath Table Mountain. Steam gave way to diesel on the final approaches, and the station concourse bustled with Capetonians, tourists, and the aroma of Malay curries from nearby vendors.",
+        "1990": "The 1990s brought Metrorail's growing commuter crush and the first stirrings of station modernisation. The historic Edwardian building stood resilient as the forecourt transformed with informal trading, taxi ranks, and the energy of a city reinventing itself in the dawn of democracy.",
+        "2023": "Today, Cape Town Station is a vibrant transport interchange where MyCiTi buses, Metrorail, and Shosholoza Meyl converge. The restored Victorian facade opens onto a bustling plaza of food markets, street performers, and the gateway to the Mother City — where every arrival feels like a homecoming.",
+    },
+}
+
 _DEFAULT_STOP_CONTENT: dict = {
     "stop_name": "Shosholoza Corridor Stop",
     "historical_narrative": "A key stop along the historic South African rail corridor.",
@@ -621,10 +676,12 @@ def get_stop_content(stop_key: str) -> dict:
     a generic corridor profile rather than erroring."""
     entry = SHOSHOLOZA_ROUTE_STORIES.get(stop_key, _DEFAULT_STOP_CONTENT)
     coordinates = STOP_COORDINATES.get(stop_key, (None, None))
+    eras = TIMELINE_EVOLUTION.get(stop_key, {})
     return {
         **entry,
         "heritage_sites": list(entry["heritage_sites"]),
         "local_stalls": list(entry["local_stalls"]),
         "lat": coordinates[0],
         "lon": coordinates[1],
+        "eras": eras,
     }
