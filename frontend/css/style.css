@@ -94,6 +94,48 @@ header h1 {
     font-size: 0.95rem;
 }
 
+
+#hero {
+    min-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 4rem 1.5rem;
+
+    background-image: url("../assets/background.jpg");
+    background-size: cover;
+    background-position: center;
+    color: white;
+}
+#hero h2 {
+    font-size: clamp(3rem, 10vw, 7rem);
+    margin: 1rem 0;
+}
+
+#hero .hero-label {
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+#hero .hero-subtitle {
+    font-size: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+#btn-begin-journey {
+    padding: 0.9rem 2rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
 nav {
     display: flex;
     justify-content: center;
@@ -160,6 +202,7 @@ main {
 }
 
 #map-container {
+    display: none;
     position: relative;
     flex: 1;
     min-height: 400px;
