@@ -73,6 +73,33 @@
                         <ul id="poi-list"></ul>
                     </div>
                 </div>
+                <div id="stop-panel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="stop-panel-title">
+                    <button id="close-stop-panel" aria-label="Close stop insights">&times;</button>
+                    <h3 id="stop-panel-title">Stop Insights</h3>
+                    <p id="stop-panel-archival" class="panel-note">
+                        Archival past &amp; present imagery lands with heritage-site partner outreach (WBS Phase 1).
+                    </p>
+                    <h4 id="panel-stop-name"></h4>
+                    <p id="panel-narrative" class="panel-narrative"></p>
+                    <h5>Heritage Sites</h5>
+                    <ul id="panel-heritage-list"></ul>
+                    <h5>Local Stalls &amp; Vendors</h5>
+                    <ul id="panel-stalls-list"></ul>
+                    <button id="btn-continue-journey" class="hidden">Resume Journey</button>
+                </div>
+            </div>
+
+            <div id="guide-chat" class="hidden" role="region" aria-label="Route guide chat">
+                <div class="guide-header">
+                    <h3>Route Guide</h3>
+                    <p>Ask about the route, station history, or local culture.</p>
+                </div>
+                <div id="chat-messages" class="guide-messages" aria-live="polite"></div>
+                <form id="guide-form">
+                    <input id="guide-input" type="text" placeholder="e.g. What happened at Kimberley station?" autocomplete="off" aria-label="Ask the route guide">
+                    <button type="submit">Ask</button>
+                </form>
+                <p id="guide-status" class="guide-status"></p>
             </div>
 
             <div id="controls">
