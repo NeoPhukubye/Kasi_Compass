@@ -328,6 +328,79 @@ def test_create_memory_echoes_audio_url_and_rejects_invalid_one():
     )
     assert response.status_code == 422
 
+# ---------------------------------------------------------------------
+# Stop discovery + geofence verification (/story-engine) — the CLI and
+# frontend surfaces for looking up a stop and checking live telemetry.
+# ---------------------------------------------------------------------
+
+def test_stop_discovery_returns_narrative_sites_stalls_and_coordinates():
+    response = client.get("/story-engine/stop/kimberley")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    data = body["data"]
+    assert data["stop_name"] == "Kimberley Station"
+    assert "diamond" in data["historical_narrative"].lower()
+    assert any(s["name"] == "Kimberley Big Hole" for s in data["heritage_sites"])
+    assert data["local_stalls"]
+    assert data["lat"] == -28.7353
+    assert data["lon"] == 24.7697
+
+
+def test_stop_discovery_falls_back_to_generic_profile_for_unknown_stop():
+    response = client.get("/story-engine/stop/nowhere")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["stop_name"] == "Shosholoza Corridor Stop"
+    assert data["lat"] is None
+    assert data["lon"] is None
+
+
+def test_geofence_verify_inside_and_outside():
+    # Rider just off Kimberley station, within the default 100m radius.
+    inside = client.get(
+        "/story-engine/geofence/verify",
+        params={
+            "user_lat": -28.7353,
+            "user_lon": 24.7697,
+            "target_lat": -28.73532,
+            "target_lon": 24.76972,
+        },
+    )
+    assert inside.status_code == 200
+    assert inside.json()["inside_geofence"] is True
+    assert inside.json()["metrics"]["threshold_radius_m"] == 100.0
+
+    # ~2km out — outside the default radius, inside a generous one.
+    outside = client.get(
+        "/story-engine/geofence/verify",
+        params={
+            "user_lat": -28.7353,
+            "user_lon": 24.7697,
+            "target_lat": -28.7510,
+            "target_lon": 24.7697,
+        },
+    )
+    assert outside.status_code == 200
+    assert outside.json()["inside_geofence"] is False
+
+
+def test_geofence_verify_rejects_invalid_coordinates_and_radius():
+    bad_lat = client.get(
+        "/story-engine/geofence/verify",
+        params={"user_lat": 999.0, "user_lon": 24.7, "target_lat": -28.7, "target_lon": 24.7},
+    )
+    assert bad_lat.status_code == 422
+
+    zero_radius = client.get(
+        "/story-engine/geofence/verify",
+        params={
+            "user_lat": -28.7, "user_lon": 24.7,
+            "target_lat": -28.7, "target_lon": 24.7, "radius": 0,
+        },
+    )
+    assert zero_radius.status_code == 422
+
 
 def test_story_source_is_the_contributor_not_the_reviewer():
     kimberley = get_waypoint("kimberley")
