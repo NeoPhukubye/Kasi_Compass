@@ -21,6 +21,9 @@ let consecutiveShareFailures = 0;
 // slow earlier response can't overwrite a newer position/progress reading.
 let latestPositionRequest = 0;
 
+// Current stop data for the Time Machine feature
+let currentStopData = null;
+
 const els = {
     btnExplorer: document.getElementById('btn-explorer'),
     btnCompanion: document.getElementById('btn-companion'),
@@ -59,6 +62,9 @@ const els = {
     panelHeritageList: document.getElementById('panel-heritage-list'),
     panelStallsList: document.getElementById('panel-stalls-list'),
     btnContinueJourney: document.getElementById('btn-continue-journey'),
+    eraSlider: document.getElementById('era-slider'),
+    selectedYearLabel: document.getElementById('selected-year'),
+    eraDescription: document.getElementById('era-description'),
     guideChat: document.getElementById('guide-chat'),
     chatMessages: document.getElementById('chat-messages'),
     guideForm: document.getElementById('guide-form'),
@@ -94,6 +100,7 @@ function init() {
     els.btnContinueJourney.addEventListener('click', resumeExplorerJourney);
     els.guideForm.addEventListener('submit', handleGuideSubmit);
     els.languageSelect.addEventListener('change', (e) => { currentLanguage = e.target.value; });
+    els.eraSlider.addEventListener('input', handleEraChange);
 
     document.addEventListener('keydown', handleKeydown);
 
@@ -379,9 +386,14 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
     els.stopImagery.classList.add('hidden');
     els.panelArchival.classList.remove('hidden');
     els.btnContinueJourney.classList.toggle('hidden', !resumable);
+    // Reset era slider to 1970 when opening a new stop
+    els.eraSlider.value = '1970';
+    els.selectedYearLabel.textContent = '1970';
 
     try {
         const data = await fetchStopDetails(stopId);
+        // Store current stop data for Time Machine feature
+        currentStopData = data;
         els.panelStopName.textContent = data.stop_name || stopName || 'Stop Insights';
         els.panelNarrative.textContent =
             data.historical_narrative || 'No narrative recorded for this stop yet.';
@@ -394,13 +406,29 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
         );
 
         renderStopImagery(data, stopName);
+        // Set initial era description
+        if (data.eras && data.eras['1970']) {
+            els.eraDescription.textContent = data.eras['1970'];
+        }
     } catch (err) {
         console.error('Failed to fetch stop details:', err);
         els.panelNarrative.textContent = 'Could not load stop insights. Is the backend running?';
+        currentStopData = null;
     }
 
     els.stopPanel.classList.remove('hidden');
     els.closeStopPanel.focus();
+}
+
+function handleEraChange(e) {
+    const year = e.target.value;
+    els.selectedYearLabel.textContent = year;
+    
+    if (currentStopData && currentStopData.eras && currentStopData.eras[year]) {
+        els.eraDescription.textContent = currentStopData.eras[year];
+    } else {
+        els.eraDescription.textContent = `Simulating station environment and surrounding infrastructure during the ${year} era.`;
+    }
 }
 
 function renderStopImagery(data, stopName) {
