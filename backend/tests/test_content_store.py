@@ -7,7 +7,9 @@ Run with: pytest backend/tests/test_content_store.py
 
 from app.story_engine.content_store import (
     PointOfInterest,
+    SHOSHOLOZA_ROUTE_STORIES,
     get_pois,
+    get_stop_content,
     get_story,
 )
 
@@ -40,3 +42,33 @@ def test_get_pois_returns_list_for_known_waypoint():
 
 def test_get_pois_returns_empty_list_for_unknown_waypoint():
     assert get_pois("does-not-exist") == []
+
+
+def test_get_stop_content_returns_narrative_sites_stalls_and_coordinates():
+    content = get_stop_content("kimberley")
+    assert content["stop_name"] == "Kimberley Station"
+    assert "diamond" in content["historical_narrative"].lower()
+    assert any(s["name"] == "Kimberley Big Hole" for s in content["heritage_sites"])
+    assert content["local_stalls"]
+    # Coordinates come from the route so the geofence has real data.
+    assert content["lat"] == -28.7353
+    assert content["lon"] == 24.7697
+
+
+def test_get_stop_content_falls_back_to_generic_profile_for_unknown_stop():
+    content = get_stop_content("nonexistent-stop")
+    assert content["stop_name"] == "Shosholoza Corridor Stop"
+    assert content["heritage_sites"] == []
+    assert content["local_stalls"] == []
+    assert content["lat"] is None
+    assert content["lon"] is None
+
+
+def test_stop_discovery_corpus_covers_every_route_waypoint():
+    from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
+
+    route_ids = {w.id for w in PRETORIA_TO_CAPE_TOWN}
+    assert route_ids.issubset(SHOSHOLOZA_ROUTE_STORIES)
+    # Extra corridor stops carry explicit coordinates so geofencing works.
+    assert "germiston" in SHOSHOLOZA_ROUTE_STORIES
+    assert "klerksdorp" in SHOSHOLOZA_ROUTE_STORIES
