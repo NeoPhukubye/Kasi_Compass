@@ -6,6 +6,11 @@ let lastFocusedElement = null;
 let sharingPosition = false;
 let sharedPositionsInterval = null;
 
+// Waypoints whose stop-insights were already shown during the current
+// explorer run, so the journey auto-pauses exactly once per stop instead
+// of re-pausing every few seconds while passing it.
+let stopPanelsShown = new Set();
+
 // Tracks an in-flight share request and how many consecutive share failures
 // we've seen, so repeated failures can be surfaced in the UI rather than
 // only logged to the console.
@@ -41,6 +46,18 @@ const els = {
     poiList: document.getElementById('poi-list'),
     closeStory: document.getElementById('close-story'),
     languageSelect: document.getElementById('language-select'),
+    stopPanel: document.getElementById('stop-panel'),
+    closeStopPanel: document.getElementById('close-stop-panel'),
+    panelStopName: document.getElementById('panel-stop-name'),
+    panelNarrative: document.getElementById('panel-narrative'),
+    panelHeritageList: document.getElementById('panel-heritage-list'),
+    panelStallsList: document.getElementById('panel-stalls-list'),
+    btnContinueJourney: document.getElementById('btn-continue-journey'),
+    guideChat: document.getElementById('guide-chat'),
+    chatMessages: document.getElementById('chat-messages'),
+    guideForm: document.getElementById('guide-form'),
+    guideInput: document.getElementById('guide-input'),
+    guideStatus: document.getElementById('guide-status'),
 };
 
 function beginJourney() {
@@ -67,6 +84,9 @@ function init() {
     els.btnGps.addEventListener('click', toggleCompanionMode);
     els.shareToggle.addEventListener('change', onShareToggleChanged);
     els.closeStory.addEventListener('click', hideStoryCard);
+    els.closeStopPanel.addEventListener('click', closeStopPanel);
+    els.btnContinueJourney.addEventListener('click', resumeExplorerJourney);
+    els.guideForm.addEventListener('submit', handleGuideSubmit);
     els.languageSelect.addEventListener('change', (e) => { currentLanguage = e.target.value; });
 
     document.addEventListener('keydown', handleKeydown);
@@ -84,6 +104,9 @@ function handleKeydown(e) {
         if (lastFocusedElement) {
             lastFocusedElement.focus();
         }
+    }
+    if (e.key === 'Escape' && !els.stopPanel.classList.contains('hidden')) {
+        closeStopPanel();
     }
     if (els.speedSlider.matches(':focus') && (e.key === 'ArrowLeft' || e.key === 'ArrowDown')) {
         e.preventDefault();
@@ -107,6 +130,7 @@ function switchMode(mode) {
         els.btnCompanion.setAttribute('aria-pressed', 'false');
         els.explorerControls.classList.remove('hidden');
         els.companionControls.classList.add('hidden');
+        els.guideChat.classList.add('hidden');
         stopCompanionTracking();
     } else {
         els.btnCompanion.classList.add('active');
@@ -115,6 +139,8 @@ function switchMode(mode) {
         els.btnExplorer.setAttribute('aria-pressed', 'false');
         els.companionControls.classList.remove('hidden');
         els.explorerControls.classList.add('hidden');
+        els.guideChat.classList.remove('hidden');
+        initGuideChat();
         pauseExplorerJourney();
     }
 }
@@ -136,29 +162,58 @@ function clearExplorerInterval() {
     }
 }
 
+async function pollExplorerJourney() {
+    if (currentProgress <= 0 || currentProgress >= 1) return;
+
+    const pos = getPositionAlongRoute(currentProgress);
+    if (!pos) return;
+
+    try {
+        const result = await fetchPosition(pos.lat, pos.lon, currentLanguage);
+        if (
+            result.triggered &&
+            result.story_text &&
+            result.waypoint_id &&
+            !stopPanelsShown.has(result.waypoint_id)
+        ) {
+            stopPanelsShown.add(result.waypoint_id);
+            await showStoryCard(result);
+            await showStopInsights(result.waypoint_id, result.waypoint_name, { resumable: true });
+            pauseExplorerJourney();
+        }
+    } catch (err) {
+        console.error('Failed to fetch position:', err);
+    }
+}
+
 function startExplorerJourney() {
     clearExplorerInterval();
 
     resetJourney();
+    stopPanelsShown.clear();
+    closeStopPanel();
     els.btnStart.disabled = true;
     els.btnPause.disabled = false;
     startAnimation();
 
-    explorerInterval = setInterval(async () => {
-        if (currentProgress <= 0 || currentProgress >= 1) return;
+    explorerInterval = setInterval(pollExplorerJourney, 2000);
+}
 
-        const pos = getPositionAlongRoute(currentProgress);
-        if (!pos) return;
+// Picks up exactly where the auto-pause at a stop left off, without
+// resetting journey progress (which Start Journey does).
+function resumeExplorerJourney() {
+    closeStopPanel();
 
-        try {
-            const result = await fetchPosition(pos.lat, pos.lon, currentLanguage);
-            if (result.triggered && result.story_text) {
-                showStoryCard(result);
-            }
-        } catch (err) {
-            console.error('Failed to fetch position:', err);
-        }
-    }, 2000);
+    if (currentProgress <= 0 || currentProgress >= 1) {
+        startExplorerJourney();
+        return;
+    }
+
+    clearExplorerInterval();
+    els.btnStart.disabled = true;
+    els.btnPause.disabled = false;
+    startAnimation();
+    explorerInterval = setInterval(pollExplorerJourney, 2000);
 }
 
 function pauseExplorerJourney() {
@@ -285,7 +340,7 @@ async function showStoryCard(data) {
 
     if (data.waypoint_id) {
         try {
-            const pois = await fetchPois(data.waypoint_id);
+            const pois = await fetchPOIs(data.waypoint_id);
             if (pois.length > 0) {
                 els.storyPois.classList.remove('hidden');
                 els.poiList.innerHTML = pois
@@ -310,6 +365,53 @@ async function showStoryCard(data) {
     }
 }
 
+async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
+    els.panelStopName.textContent = stopName || 'Stop Insights';
+    els.panelNarrative.textContent = 'Loading stop insights...';
+    els.panelHeritageList.innerHTML = '';
+    els.panelStallsList.innerHTML = '';
+    els.btnContinueJourney.classList.toggle('hidden', !resumable);
+
+    try {
+        const data = await fetchStopDetails(stopId);
+        els.panelStopName.textContent = data.stop_name || stopName || 'Stop Insights';
+        els.panelNarrative.textContent =
+            data.historical_narrative || 'No narrative recorded for this stop yet.';
+
+        renderFoundItems(els.panelHeritageList, data.heritage_sites, 'heritage', (site) =>
+            `${site.name} (${site.era}): ${site.description}`
+        );
+        renderFoundItems(els.panelStallsList, data.local_stalls, 'stall', (stall) =>
+            `${stall.name} [${stall.category}]: ${stall.description}`
+        );
+    } catch (err) {
+        console.error('Failed to fetch stop details:', err);
+        els.panelNarrative.textContent = 'Could not load stop insights. Is the backend running?';
+    }
+
+    els.stopPanel.classList.remove('hidden');
+    els.closeStopPanel.focus();
+}
+
+function renderFoundItems(listEl, items, emptyLabel, formatItem) {
+    listEl.innerHTML = '';
+    if (items && items.length > 0) {
+        items.forEach((item) => {
+            const li = document.createElement('li');
+            li.textContent = formatItem(item);
+            listEl.appendChild(li);
+        });
+    } else {
+        const li = document.createElement('li');
+        li.textContent = emptyLabel;
+        listEl.appendChild(li);
+    }
+}
+
+function closeStopPanel() {
+    els.stopPanel.classList.add('hidden');
+}
+
 function hideStoryCard() {
     els.storyCard.classList.add('hidden');
 }
@@ -318,10 +420,13 @@ async function onWaypointClick(waypoint) {
     try {
         const result = await fetchPosition(waypoint.lat, waypoint.lon, currentLanguage);
         if (result.triggered && result.story_text) {
-            showStoryCard(result);
+            await showStoryCard(result);
         }
     } catch (err) {
         console.error('Failed to fetch position for waypoint:', err);
+    }
+    if (waypoint.id) {
+        await showStopInsights(waypoint.id, waypoint.name, { resumable: false });
     }
 }
 
@@ -353,6 +458,58 @@ function stopPositionSharing() {
     }
     clearSharedPositionMarkers();
     leaveLiveShare();
+}
+
+// ---------------------------------------------------------------------
+// Route Guide chat (Companion Mode)
+// ---------------------------------------------------------------------
+
+function initGuideChat() {
+    if (els.chatMessages.children.length === 0) {
+        appendGuideMessage(
+            'ai',
+            "Sawubona! I'm your Kasi Compass route guide. Ask about Kimberley's diamond rush, " +
+            "the stalls around Park Station, or any stop on the Pretoria–Cape Town line."
+        );
+    }
+    els.guideInput.focus();
+}
+
+function appendGuideMessage(role, text) {
+    const message = document.createElement('div');
+    message.className = `chat-message ${role}`;
+    const paragraph = document.createElement('p');
+    paragraph.textContent = text;
+    message.appendChild(paragraph);
+    els.chatMessages.appendChild(message);
+    els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+}
+
+async function handleGuideSubmit(event) {
+    event.preventDefault();
+
+    const question = els.guideInput.value.trim();
+    if (!question) return;
+
+    appendGuideMessage('user', question);
+    els.guideInput.value = '';
+    els.guideStatus.textContent = 'Consulting the route archives...';
+
+    try {
+        const result = await askGuide(question);
+        appendGuideMessage('ai', result.answer);
+        els.guideStatus.textContent = result.ai_used
+            ? 'Drafted by Gemini, grounded in our route corpus.'
+            : 'Answered from the human-reviewed route corpus.';
+    } catch (err) {
+        console.error('Failed to reach the guide:', err);
+        appendGuideMessage(
+            'ai',
+            'The route guide is offline right now (backend not reachable). Start the backend and ask again.'
+        );
+        els.guideStatus.textContent = '';
+    }
+    els.guideInput.focus();
 }
 
 document.addEventListener('DOMContentLoaded', init);
