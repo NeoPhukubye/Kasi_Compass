@@ -48,6 +48,12 @@ const els = {
     languageSelect: document.getElementById('language-select'),
     stopPanel: document.getElementById('stop-panel'),
     closeStopPanel: document.getElementById('close-stop-panel'),
+    panelArchival: document.getElementById('stop-panel-archival'),
+    stopImagery: document.getElementById('stop-imagery'),
+    stopImgPast: document.getElementById('stop-img-past'),
+    stopImgPresent: document.getElementById('stop-img-present'),
+    stopImgPastCaption: document.getElementById('stop-img-past-caption'),
+    stopImgPresentCaption: document.getElementById('stop-img-present-caption'),
     panelStopName: document.getElementById('panel-stop-name'),
     panelNarrative: document.getElementById('panel-narrative'),
     panelHeritageList: document.getElementById('panel-heritage-list'),
@@ -370,6 +376,8 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
     els.panelNarrative.textContent = 'Loading stop insights...';
     els.panelHeritageList.innerHTML = '';
     els.panelStallsList.innerHTML = '';
+    els.stopImagery.classList.add('hidden');
+    els.panelArchival.classList.remove('hidden');
     els.btnContinueJourney.classList.toggle('hidden', !resumable);
 
     try {
@@ -384,6 +392,8 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
         renderFoundItems(els.panelStallsList, data.local_stalls, 'stall', (stall) =>
             `${stall.name} [${stall.category}]: ${stall.description}`
         );
+
+        renderStopImagery(data, stopName);
     } catch (err) {
         console.error('Failed to fetch stop details:', err);
         els.panelNarrative.textContent = 'Could not load stop insights. Is the backend running?';
@@ -391,6 +401,21 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
 
     els.stopPanel.classList.remove('hidden');
     els.closeStopPanel.focus();
+}
+
+function renderStopImagery(data, stopName) {
+    const hasRealImages = Boolean(data.image_past && data.image_present);
+    if (hasRealImages) {
+        els.stopImgPast.src = data.image_past;
+        els.stopImgPresent.src = data.image_present;
+    }
+    const stopLabel = stopName || data.stop_name || 'This stop';
+    els.stopImgPast.alt = data.image_past_alt || `${stopLabel} in the past era`;
+    els.stopImgPresent.alt = data.image_present_alt || `${stopLabel} today`;
+    els.stopImgPastCaption.textContent = data.image_past_caption || '';
+    els.stopImgPresentCaption.textContent = data.image_present_caption || '';
+    els.stopImagery.classList.remove('hidden');
+    els.panelArchival.classList.add('hidden');
 }
 
 function renderFoundItems(listEl, items, emptyLabel, formatItem) {
