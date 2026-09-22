@@ -36,6 +36,15 @@ A different privacy category from geofence triggering (which only ever checks a 
 - **Non-persistent** — positions live in an in-memory store with a 45-second TTL and are never written to disk. Restarting the backend clears all of it (and this doesn't scale past a single server process — a known, stated limitation at this project's current scope, not a silent one).
 - **Explicit leave** — turning sharing off, stopping GPS tracking, or closing the tab (via `navigator.sendBeacon`) removes a rider's position immediately rather than waiting out the TTL.
 
+### Rider memories: the older generation relives, the new generation creates
+
+Every stop carries a curated *historical* story (see the content model below) — that's the old memory of a place. Riders also leave *new* memories that the next traveller can relive:
+
+- **Create (`POST /journey/memories`)** — a rider passing a stop drops a first-person memory (text, bounded to 2,000 chars, keyed to an anonymous opaque rider UUID — no name, no session).
+- **Relive (`GET /journey/memories`)** — newest-first memories for a waypoint (or the whole route), the rider-voice companion to the curator's story at the same stop.
+- **Validation** — memories can only attach to real waypoints; unknown ids, blank/oversized text, and malformed rider ids are rejected (422). The store is bounded (oldest evicted) so a demo process can't grow without limit.
+- **Persistence plan** — the in-memory `MemoryStore` (`backend/app/story_engine/memories.py`) is the documented swap target for a PostGIS `rider_memories` table; the module docstring includes the production schema and the interface the DB-backed store must keep so `api.py` doesn't change.
+
 ### Content model: human-sourced first, AI assistive only
 
 Following direct feedback from Geekulcha organizers to align this build "more to a sense of reality" and reduce AI reliance, the content pipeline has been redesigned:
@@ -79,6 +88,7 @@ Story & Route Engine (Python)
   - Geofence trigger engine (haversine distance vs. waypoint radius)
   - Route/waypoint graph (real Pretoria-Cape Town stations + coordinates)
   - Human-sourced content store (no AI call in the runtime path)
+  - Rider memories store (create new / relive old — PostGIS in production)
         |
         v
 PostGIS (production) / in-process data (current lab build)
@@ -100,9 +110,10 @@ Per organizer guidance to build to **TRL 4** ahead of the hackathon weekend, thi
 
 **TRL 4 evidence (integrated system, validated together — new):**
 - A single running FastAPI service (`app/story_engine/api.py`) that wires the route data, geofence engine, and human-sourced content store together into one request path -- `GET /journey/position?lat=...&lon=...` returns the correct triggered waypoint *and* its human-reviewed story in one call, with no manual glue code between modules.
-- **5 end-to-end integration tests** (`backend/tests/test_integration.py`) that exercise this actual running app via `TestClient` -- real HTTP requests in, real JSON responses out -- including a test that confirms every returned story carries a human reviewer, not an AI attribution.
+- **End-to-end integration tests** (`backend/tests/test_integration.py`) that exercise this actual running app via `TestClient` -- real HTTP requests in, real JSON responses out -- including a test that confirms every returned story carries a human reviewer, not an AI attribution.
+- **Rider memories over HTTP** (`POST`/`GET /journey/memories`) — new memories created by riders at a stop and relived by later travellers, validated end-to-end (unknown waypoint, blank text, malformed rider id all 422).
 - **Guardrail tests for the AI-assisted translation path** (`backend/tests/test_translation_tool.py`) — verifies the running API imports no AI SDK, that drafts can't be applied without human review, and that AI-looking reviewer names are rejected.
-- **26/26 tests passing** across all three suites.
+- **70/70 tests passing** across all seven suites (story engine, content store, route, live share, memories, translation tool, integration).
 
 **Not yet reached (TRL 5+):**
 - No live GPS feed from an actual train -- Companion Mode is validated against known coordinates in this lab environment, not yet tested onboard a moving train.
@@ -165,12 +176,14 @@ backend/
     route.py           # Real Pretoria-Cape Town waypoints + coordinates
     geofence.py         # Haversine-based story trigger engine
     content_store.py    # Human-sourced, human-reviewed story content
+    memories.py         # Rider-shared memories ("create new / relive old")
     api.py               # Integrated FastAPI service (TRL 4 evidence)
   tools/
     translate_stories.py   # OFFLINE Gemini drafts for human review — not in request path
   tests/
     test_story_engine.py     # Unit tests (TRL 3 evidence)
     test_integration.py       # End-to-end integration tests (TRL 4 evidence)
+    test_memories.py          # Rider memories store (create + relive + validation)
     test_translation_tool.py  # AI-guardrail tests (human review, no AI in runtime)
   .env.example          # GEMINI_API_KEY template (copy to .env, which is gitignored)
 frontend/
