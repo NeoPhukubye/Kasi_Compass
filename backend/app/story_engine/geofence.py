@@ -38,6 +38,21 @@ class StoryTrigger:
     distance_meters: float
 
 
+def check_geofence(
+    user_lat: float,
+    user_lon: float,
+    target_lat: float,
+    target_lon: float,
+    radius_meters: float = 100.0,
+) -> bool:
+    """True if (user_lat, user_lon) is within `radius_meters` of the target
+    point — the live-telemetry proximity check used by
+    /story-engine/geofence/verify (e.g. a rider inside an Uber/transit
+    vehicle approaching a stop). Thin wrapper over haversine_meters so the
+    distance math is the same everywhere in the app."""
+    return haversine_meters(user_lat, user_lon, target_lat, target_lon) <= radius_meters
+
+
 def nearest_waypoint(current_lat: float, current_lon: float) -> Waypoint:
     """Return the waypoint on the route closest to the given position."""
     return min(
