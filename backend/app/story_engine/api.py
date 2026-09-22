@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from app.story_engine.content_store import get_story, get_story_source, get_pois, get_stop_content
 from app.story_engine.geofence import check_geofence, find_triggered_waypoint, route_progress_fraction
+from app.story_engine.guide import answer_question
 from app.story_engine.live_share import RIDER_ID_PATTERN, live_position_store
 from app.story_engine.memories import (
     DEFAULT_MEMORIES_LIMIT,
@@ -320,5 +321,42 @@ def verify_geofence(
             "threshold_radius_m": radius,
         },
     }
+
+class AskGuideRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+
+class GuideResponse(BaseModel):
+    answer: str
+    source: str  # "route-corpus" or "gemini"
+    ai_used: bool
+    stop_id: str | None = None
+    stop_name: str | None = None
+
+@story_engine_router.post("/ask", response_model=GuideResponse)
+def ask_guide(payload: AskGuideRequest) -> GuideResponse:
+    """
+    Companion Mode's tour guide. The guide is grounded in the human-reviewed
+    corpus by default; if a server-side GEMINI_API_KEY is configured, the
+    question is sent to Gemini for a draft that is still anchored to that
+    corpus, and any Gemini failure falls back to the corpus answer. The API
+    key lives only in the backend environment, never in browser JS.
+
+    This is the *one* user-invoked, opt-in AI surface in the runtime; the
+    core /journey/* story path remains free of any AI dependency (see
+    README §"Content model").
+    """
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="question must not be blank")
+
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip() or None
+    result = answer_question(question, api_key=api_key)
+    return GuideResponse(
+        answer=result["answer"],
+        source=result["source"],
+        ai_used=result["ai_used"],
+        stop_id=result.get("stop_id"),
+        stop_name=result.get("stop_name"),
+    )
 
 app.include_router(story_engine_router)
