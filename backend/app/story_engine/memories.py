@@ -25,6 +25,16 @@ Design guardrails, written into the module rather than assumed:
   experience-sharing, not broadcast content. The store is small and bounded
   (see MAX_MEMORIES) so a human can review the whole set in a morning;
   automated moderation is a stated out-of-scope item, not an accident.
+- Coordinate-tagged: a memory may carry the exact spot it was dropped at
+  (lat/lon, optional — both are required together). Riders passing that
+  spot later can "unlock" memories with memories_near(), the geofenced
+  relive path: the older generation's memory surfaces only where it was
+  left, instead of only at a whole waypoint's 5km trigger radius.
+- Audio-ready: a memory may reference a hosted voice-note via audio_url.
+  Binary upload/hosting is a stated out-of-scope item for the current no-DB
+  build; the field exists so a voice recorder can point at a signed URL
+  without a schema change. Written on disk in production: nothing here ever
+  stores the bytes.
 
 Persistence plan (in-memory now, PostGIS in production):
 - The README architecture shows PostGIS as the production data layer, and
@@ -38,16 +48,22 @@ Persistence plan (in-memory now, PostGIS in production):
           rider_id      uuid    NOT NULL,
           body          text    NOT NULL CHECK (char_length(body) BETWEEN 1 AND 2000),
           language_code text    NOT NULL DEFAULT 'en',
-          created_at    timestamptz NOT NULL DEFAULT now()
+          lat           double precision,          -- NULL = not spot-tagged
+          lon           double precision,          -- NULL = not spot-tagged
+          audio_url     text,                       -- hosted voice note, if any
+          created_at    timestamptz NOT NULL DEFAULT now(),
+          CHECK ( (lat IS NULL) = (lon IS NULL) )
       );
       CREATE INDEX ON rider_memories (waypoint_id, created_at DESC);
+      CREATE INDEX ON rider_memories (lat, lon);  -- geofenced unlock lookups
 
   A `MemoryStore` implementation backed by this table would implement the
-  same four methods (add_memory, memories_for, count, all_memories) and be
-  swapped in at the single `memory_store` instance below, leaving api.py
-  untouched. Until then, memories live in an in-memory list: lost on
-  process restart and confined to a single server process, exactly like
-  live_share's positions — a known, stated limitation at MVP scope.
+  same methods (add_memory, memories_for, memories_near, count,
+  all_memories) and be swapped in at the single `memory_store` instance
+  below, leaving api.py untouched. Until then, memories live in an
+  in-memory list: lost on process restart and confined to a single server
+  process, exactly like live_share's positions — a known, stated limitation
+  at MVP scope.
 """
 
 from __future__ import annotations
@@ -56,6 +72,7 @@ import time
 import uuid
 from dataclasses import dataclass
 
+from app.story_engine.geofence import haversine_meters
 from app.story_engine.live_share import RIDER_ID_PATTERN, is_valid_rider_id
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
@@ -74,6 +91,12 @@ MAX_MEMORIES = 500
 # Default page size for the listing endpoint.
 DEFAULT_MEMORIES_LIMIT = 20
 
+# Default radius for the geofenced "unlock memories at this spot" lookup.
+# Tighter than the 5km story-trigger radius on purpose: a memory is pinned
+# to the exact spot it was dropped, so reliving it means being basically
+# *there* — walking the platform, not just passing the town.
+DEFAULT_NEARBY_RADIUS_METERS = 1_000
+
 
 @dataclass(frozen=True)
 class Memory:
@@ -83,8 +106,11 @@ class Memory:
     text: str
     created_at: float  # time.time() epoch, for parity with live_share
     language_code: str = "en"
+    lat: float | None = None  # both lat and lon set together, or neither
+    lon: float | None = None
+    audio_url: str | None = None  # reference to a hosted voice note, never the bytes
 
-    def as_dict(self) -> dict[str, str | float]:
+    def as_dict(self) -> dict[str, str | float | None]:
         return {
             "memory_id": self.memory_id,
             "waypoint_id": self.waypoint_id,
@@ -92,6 +118,9 @@ class Memory:
             "text": self.text,
             "created_at": self.created_at,
             "language_code": self.language_code,
+            "lat": self.lat,
+            "lon": self.lon,
+            "audio_url": self.audio_url,
         }
 
 
@@ -111,6 +140,9 @@ class MemoryStore:
         rider_id: str,
         text: str,
         language_code: str = "en",
+        lat: float | None = None,
+        lon: float | None = None,
+        audio_url: str | None = None,
         now: float | None = None,
     ) -> Memory:
         """Validate and store a rider memory, evicting the oldest entry if
@@ -130,6 +162,17 @@ class MemoryStore:
                 f"got {len(stripped)}"
             )
 
+        if (lat is None) != (lon is None):
+            raise ValueError("lat and lon must be provided together, or not at all")
+        if lat is not None and not -90.0 <= lat <= 90.0:
+            raise ValueError(f"lat must be between -90 and 90, got {lat}")
+        if lon is not None and not -180.0 <= lon <= 180.0:
+            raise ValueError(f"lon must be between -180 and 180, got {lon}")
+
+        audio = audio_url.strip() if audio_url else None
+        if audio is not None and not (audio.startswith("http://") or audio.startswith("https://")):
+            raise ValueError("audio_url must be an absolute http(s) URL")
+
         memory = Memory(
             memory_id=str(uuid.uuid4()),
             waypoint_id=waypoint_id,
@@ -137,6 +180,9 @@ class MemoryStore:
             text=stripped,
             created_at=now if now is not None else time.time(),
             language_code=language_code,
+            lat=lat,
+            lon=lon,
+            audio_url=audio,
         )
         self._memories.append(memory)
 
@@ -153,6 +199,27 @@ class MemoryStore:
         newest_first = sorted(self._memories, key=lambda m: m.created_at, reverse=True)
         filtered = newest_first if waypoint_id is None else [m for m in newest_first if m.waypoint_id == waypoint_id]
         return filtered[:limit]
+
+    def memories_near(
+        self,
+        lat: float,
+        lon: float,
+        radius_meters: float = DEFAULT_NEARBY_RADIUS_METERS,
+        limit: int = DEFAULT_MEMORIES_LIMIT,
+    ) -> list[Memory]:
+        """Return memories tagged to a spot within `radius_meters` of
+        (lat, lon) — the geofenced unlock path. Only memories that carry
+        coordinates can match; untagged ones are invisible to this query.
+        Newest first, capped at `limit`."""
+        nearby = [
+            m
+            for m in self._memories
+            if m.lat is not None
+            and m.lon is not None
+            and haversine_meters(lat, lon, m.lat, m.lon) <= radius_meters
+        ]
+        nearby.sort(key=lambda m: m.created_at, reverse=True)
+        return nearby[:limit]
 
     def count(self) -> int:
         return len(self._memories)
