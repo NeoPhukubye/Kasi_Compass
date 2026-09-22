@@ -325,6 +325,17 @@ WAYPOINT_POIS: dict[str, list[PointOfInterest]] = {
     ],
 }
 
+def get_story_source(waypoint_id: str) -> str | None:
+    """
+    Return who originally contributed a waypoint's story (person,
+    heritage site, or org — never an AI attribution), regardless of
+    language. The API exposes this as `story_source`; the per-translation
+    `reviewed_by` field is who *approved* that specific text, which is not
+    the same thing and should not be surfaced as the source.
+    """
+    entry = STORY_CONTENT.get(waypoint_id)
+    return entry.source if entry is not None else None
+
 def get_story(waypoint_id: str, language_code: str = "en") -> LocalizedStory | None:
     """
     Return the human-reviewed story for a waypoint in the requested
