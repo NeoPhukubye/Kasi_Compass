@@ -25,6 +25,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
+
 @dataclass(frozen=True)
 class LocalizedStory:
     language_code: str  # e.g. "en", "zu", "af", "xh"
@@ -355,3 +357,252 @@ def get_pois(waypoint_id: str) -> list[PointOfInterest]:
     stops before getting off the train.
     """
     return list(WAYPOINT_POIS.get(waypoint_id, []))
+
+# ---------------------------------------------------------------------
+# Shosholoza stop-discovery corpus.
+#
+# Distinct from STORY_CONTENT: that corpus feeds the *geofenced story
+# card* (one human-reviewed LocalizedStory per waypoint, served by
+# /journey/position). This corpus feeds the *stop detail / discovery*
+# endpoint (/story-engine/stop/{id}) — a richer, human-sourced profile of
+# each stop's narrative, heritage sites, and the informal-trading stalls
+# that live around the station. Coordinates come from STOP_COORDINATES
+# below so geofencing /story-engine/geofence/verify has real data to
+# compare against without touching the animation route.
+# ---------------------------------------------------------------------
+
+SHOSHOLOZA_ROUTE_STORIES: dict[str, dict] = {
+    "johannesburg_park": {
+        "stop_name": "Johannesburg Park Station",
+        "historical_narrative": (
+            "The heart of Gauteng's rail network, Park Station has been the starting point for "
+            "generations of travelers and migrant workers. It represents the bustling beginning "
+            "of long-distance journeys across South Africa."
+        ),
+        "heritage_sites": [
+            {
+                "name": "Park Station Main Concourse",
+                "era": "Historical & Modern",
+                "description": "The central hub linking commuters to various national routes.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Station Concourse Vendors",
+                "category": "Food & Goods",
+                "description": "Quick snacks, newspapers, and travel essentials for departing passengers.",
+            }
+        ],
+    },
+    "germiston": {
+        "stop_name": "Germiston Station",
+        "historical_narrative": (
+            "For much of the 20th century Germiston was South Africa's railway junction: its "
+            "marshalling yards were once among the largest in the world, sorting the traffic of "
+            "the gold mines onto the national mainline. The station's rhythm reflected the "
+            "generations of workers who passed through on their way to the Reef and beyond."
+        ),
+        "heritage_sites": [
+            {
+                "name": "Germiston Railway Yards",
+                "era": "Mid-20th Century",
+                "description": "Historic marshalling yards once ranked among the biggest rail freight yards globally.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Station Approach Traders",
+                "category": "Food & Goods",
+                "description": "Commuters' vendors serving street food and daily essentials at the taxi rank.",
+            }
+        ],
+    },
+    "kimberley": {
+        "stop_name": "Kimberley Station",
+        "historical_narrative": (
+            "Famous for its diamond rush history, Kimberley sits centrally on the route. The "
+            "station reflects the era of the mineral revolution, connecting the Northern Cape to "
+            "the rest of the country."
+        ),
+        "heritage_sites": [
+            {
+                "name": "Kimberley Big Hole",
+                "era": "Late 19th Century",
+                "description": "The historic open-pit mine that defined the region.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Platform Craft Markets",
+                "category": "Souvenirs",
+                "description": "Local crafts and regional snacks available during train stops.",
+            }
+        ],
+    },
+    "klerksdorp": {
+        "stop_name": "Klerksdorp Station",
+        "historical_narrative": (
+            "A North West gold-mining town on the historic mainline to the Cape, Klerksdorp has "
+            "long been the corridor's gateway between the Reef and the Karoo — a stop where "
+            "trains once paused to water and to take on workers and goods."
+        ),
+        "heritage_sites": [
+            {
+                "name": "Klerksdorp Museum",
+                "era": "Early 20th Century",
+                "description": "Records the town's mining and railway past at the heart of the province.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Town Centre Vendors",
+                "category": "Food & Goods",
+                "description": "Stalls serving Mogodu, pap, and commuting basics near the station.",
+            }
+        ],
+    },
+    "de_aar": {
+        "stop_name": "De Aar Station",
+        "historical_narrative": (
+            "The great Karoo rail junction — the point on the line to Cape Town, Port Elizabeth, "
+            "and Namibia where engines were serviced and crews changed, and where the silence of "
+            "the Karoo met the hubbub of the passing trains."
+        ),
+        "heritage_sites": [
+            {
+                "name": "De Aar Railway Junction",
+                "era": "Early 20th Century",
+                "description": "A strategically vital junction town for the national rail grid.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Karoo Station Market",
+                "category": "Local Produce",
+                "description": "Regional crafts and edibles from the town's weekly market.",
+            }
+        ],
+    },
+    "beaufort_west": {
+        "stop_name": "Beaufort West Station",
+        "historical_narrative": (
+            "The Karoo's oldest town and a Victorian-era halt on the long ride south. Travellers "
+            "crossing the great thirst would rest here before the final push over the Cape ranges."
+        ),
+        "heritage_sites": [
+            {
+                "name": "Beaufort West Town Hall",
+                "era": "Late 19th Century",
+                "description": "The oldest town hall in South Africa, and the gateway to the Karoo National Park.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Karoo Karoo Market",
+                "category": "Artisan Goods",
+                "description": "Local produce and artisanal goods from the Central Karoo.",
+            }
+        ],
+    },
+    "matjiesfontein": {
+        "stop_name": "Matjiesfontein Station",
+        "historical_narrative": (
+            "A perfectly preserved Victorian-era refreshment stop frozen in time in the Karoo — "
+            "the same gas lamps and station buildings that greeted travellers over a century ago "
+            "still greet them today."
+        ),
+        "heritage_sites": [
+            {
+                "name": "Matjiesfontein Heritage Village",
+                "era": "Victorian Era",
+                "description": "A time-capsule refreshment stop, still lit by gas lamp.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Village Shop",
+                "category": "Food & Craft",
+                "description": "A charming stop in the historic village for travellers and sightseers.",
+            }
+        ],
+    },
+    "worcester": {
+        "stop_name": "Worcester Station",
+        "historical_narrative": (
+            "Gateway to the Cape Winelands and the dramatic Hex River Valley pass, Worcester has "
+            "welcomed generations descending out of the Karoo into the Breede River Valley's farms."
+        ),
+        "heritage_sites": [
+            {
+                "name": "Hex River Valley Pass",
+                "era": "Mountain Pass Era",
+                "description": "The dramatic ravine that links the Karoo highveld to the Cape lowlands.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Breede River Market",
+                "category": "Wine, Cheese & Crafts",
+                "description": "A weekend market of valley produce, wine, and local crafts.",
+            }
+        ],
+    },
+    "cape_town": {
+        "stop_name": "Cape Town Station",
+        "historical_narrative": (
+            "The final destination for the Trans-Karoo, Cape Town Station sits at the foot of "
+            "Table Mountain. It has welcomed generations of travelers arriving from the interior."
+        ),
+        "heritage_sites": [
+            {
+                "name": "Cape Town Station Precinct",
+                "era": "Historical Arrival",
+                "description": "The gateway to the Mother City.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Station Plaza Vendors",
+                "category": "Local Delicacies",
+                "description": "Cape Malay treats, refreshments, and artisanal goods.",
+            }
+        ],
+    },
+}
+
+# Longitude/latitude for every stop in the discovery corpus. Waypoints that
+# are already on the animation route are derived from route.py so the two
+# can never drift; corridor stops not on the route (germiston, klerksdorp)
+# are given their real published town/station coordinates.
+STOP_COORDINATES: dict[str, tuple[float, float]] = {
+    w.id: (w.latitude, w.longitude) for w in PRETORIA_TO_CAPE_TOWN
+}
+STOP_COORDINATES.update(
+    {
+        # Germiston Station, Gauteng
+        "germiston": (-26.2184, 28.1509),
+        # Klerksdorp Station, North West
+        "klerksdorp": (-26.8677, 26.6667),
+    }
+)
+
+_DEFAULT_STOP_CONTENT: dict = {
+    "stop_name": "Shosholoza Corridor Stop",
+    "historical_narrative": "A key stop along the historic South African rail corridor.",
+    "heritage_sites": [],
+    "local_stalls": [],
+}
+
+def get_stop_content(stop_key: str) -> dict:
+    """Retrieve historical narrative, heritage sites, stalls, and geofence
+    coordinates for a given Shosholoza Meyl stop. Unknown stops fall back to
+    a generic corridor profile rather than erroring."""
+    entry = SHOSHOLOZA_ROUTE_STORIES.get(stop_key, _DEFAULT_STOP_CONTENT)
+    coordinates = STOP_COORDINATES.get(stop_key, (None, None))
+    return {
+        **entry,
+        "heritage_sites": list(entry["heritage_sites"]),
+        "local_stalls": list(entry["local_stalls"]),
+        "lat": coordinates[0],
+        "lon": coordinates[1],
+    }
