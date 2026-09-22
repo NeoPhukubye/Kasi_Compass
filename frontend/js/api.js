@@ -32,3 +32,27 @@ async function fetchPOIs(waypointId) {
     }
     return response.json();
 }
+
+async function fetchStopDetails(stopId) {
+    const response = await fetch(`${API_BASE}/story-engine/stop/${encodeURIComponent(stopId)}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch stop details: ${response.statusText}`);
+    }
+    const body = await response.json();
+    if (body.status !== 'success') {
+        throw new Error(`Stop details returned status ${body.status}`);
+    }
+    return body.data;
+}
+
+async function askGuide(question) {
+    const response = await fetch(`${API_BASE}/story-engine/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+    });
+    if (!response.ok) {
+        throw new Error(`Guide request failed: ${response.statusText}`);
+    }
+    return response.json();
+}
