@@ -162,7 +162,7 @@ function setRoute(routeData) {
 
     const bounds = new maplibregl.LngLatBounds();
     coordinates.forEach(coord => bounds.extend(coord));
-    map.fitBounds(bounds, { padding: 50 });
+    map.fitBounds(bounds, { padding: 100, maxZoom: 6 });
 }
 
 function getPositionAlongRoute(progressFraction) {

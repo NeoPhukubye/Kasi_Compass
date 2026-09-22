@@ -46,10 +46,17 @@ const els = {
 function beginJourney() {
     document.getElementById('hero').style.display = 'none';
     document.getElementById('map-container').style.display = 'block';
+
+    initMap();
+    loadRoute();
+
+    document.getElementById('map-container').scrollIntoView({
+        behavior: 'smooth'
+    });
 }
 
 function init() {
-    initMap();
+    
 
     els.btnExplorer.addEventListener('click', () => switchMode('explorer'));
     els.btnCompanion.addEventListener('click', () => switchMode('companion'));
@@ -68,7 +75,7 @@ function init() {
     window.onJourneyComplete = onJourneyComplete;
     window.onWaypointClick = onWaypointClick;
 
-    loadRoute();
+    
 }
 
 function handleKeydown(e) {
