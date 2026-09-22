@@ -112,9 +112,10 @@ Per organizer guidance to build to **TRL 4** ahead of the hackathon weekend, thi
 **TRL 4 evidence (integrated system, validated together — new):**
 - A single running FastAPI service (`app/story_engine/api.py`) that wires the route data, geofence engine, and human-sourced content store together into one request path -- `GET /journey/position?lat=...&lon=...` returns the correct triggered waypoint *and* its human-reviewed story in one call, with no manual glue code between modules.
 - **End-to-end integration tests** (`backend/tests/test_integration.py`) that exercise this actual running app via `TestClient` -- real HTTP requests in, real JSON responses out -- including a test that confirms every returned story carries a human reviewer, not an AI attribution.
-- **Rider memories over HTTP** (`POST`/`GET /journey/memories`) — new memories created by riders at a stop and relived by later travellers, validated end-to-end (unknown waypoint, blank text, malformed rider id all 422).
+- **Rider memories over HTTP** (`POST`/`GET /journey/memories`, `GET /journey/memories/nearby`) — new memories created by riders at a stop and relived by later travellers, geofence-unlockable at the exact spot they were left; validated end-to-end (unknown waypoint, blank text, malformed rider id, bad coordinates all 422).
+- **Stop discovery + live-telemetry geofence** (`GET /story-engine/stop/{id}`, `GET /story-engine/geofence/verify`, CLI in `backend/tools/stop_lookup.py`) — the Shosholoza corridor's narrative, heritage sites, stalls, and coordinates for every stop, plus proximity verification for a rider approaching a stop (default 100m radius).
 - **Guardrail tests for the AI-assisted translation path** (`backend/tests/test_translation_tool.py`) — verifies the running API imports no AI SDK, that drafts can't be applied without human review, and that AI-looking reviewer names are rejected.
-- **70/70 tests passing** across all seven suites (story engine, content store, route, live share, memories, translation tool, integration).
+- **89/89 tests passing** across all seven suites (story engine, content store, route, live share, memories, translation tool, integration).
 
 **Not yet reached (TRL 5+):**
 - No live GPS feed from an actual train -- Companion Mode is validated against known coordinates in this lab environment, not yet tested onboard a moving train.
@@ -181,6 +182,7 @@ backend/
     api.py               # Integrated FastAPI service (TRL 4 evidence)
   tools/
     translate_stories.py   # OFFLINE Gemini drafts for human review — not in request path
+    stop_lookup.py         # Stdlib-only CLI for /story-engine/stop/{id} discovery
   tests/
     test_story_engine.py     # Unit tests (TRL 3 evidence)
     test_integration.py       # End-to-end integration tests (TRL 4 evidence)
