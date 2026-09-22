@@ -256,6 +256,79 @@ def test_list_memories_rejects_unknown_waypoint():
     assert response.status_code == 422
 
 
+def test_create_and_unlock_a_coordinate_tagged_memory():
+    # An older-generation rider leaves a memory pinned to the Big Hole.
+    create = client.post(
+        "/journey/memories",
+        json={
+            "rider_id": RIDER_A,
+            "waypoint_id": "kimberley",
+            "text": "My grandmother sold vetkoek at this fence in the sixties.",
+            "lat": -28.7353,
+            "lon": 24.7697,
+        },
+    )
+    assert create.status_code == 201
+    created = create.json()
+    assert created["lat"] == -28.7353
+    assert created["lon"] == 24.7697
+
+    # A new-generation rider passing the exact spot unlocks it dynamically.
+    nearby = client.get(
+        "/journey/memories/nearby",
+        params={"lat": -28.7353, "lon": 24.7697, "radius": 500.0},
+    )
+    assert nearby.status_code == 200
+    unlocked = nearby.json()
+    assert any("vetkoek" in m["text"] for m in unlocked)
+
+    # The same rider 30km away unlocks nothing — memories are pinned, not broad.
+    far_away = client.get(
+        "/journey/memories/nearby",
+        params={"lat": -29.1, "lon": 24.7, "radius": 500.0},
+    )
+    assert far_away.json() == []
+
+
+def test_nearby_memories_ignores_untagged_memories():
+    client.post("/journey/memories", json={"rider_id": RIDER_A, "waypoint_id": "kimberley", "text": "no pin"})
+    nearby = client.get(
+        "/journey/memories/nearby",
+        params={"lat": -28.7353, "lon": 24.7697, "radius": 5000.0},
+    )
+    assert nearby.json() == []
+
+
+def test_nearby_memories_rejects_invalid_coordinates_and_radius():
+    response = client.get("/journey/memories/nearby", params={"lat": 999.0, "lon": 24.7697})
+    assert response.status_code == 422
+
+    response = client.get(
+        "/journey/memories/nearby", params={"lat": -28.7353, "lon": 24.7697, "radius": 0}
+    )
+    assert response.status_code == 422
+
+
+def test_create_memory_echoes_audio_url_and_rejects_invalid_one():
+    create = client.post(
+        "/journey/memories",
+        json={
+            "rider_id": RIDER_A,
+            "waypoint_id": "kimberley",
+            "text": "Listen to Gogo's story.",
+            "audio_url": "https://cdn.example.com/voice/gogo-kimberley.mp3",
+        },
+    )
+    assert create.status_code == 201
+    assert create.json()["audio_url"] == "https://cdn.example.com/voice/gogo-kimberley.mp3"
+
+    response = client.post(
+        "/journey/memories",
+        json={"rider_id": RIDER_A, "waypoint_id": "kimberley", "text": "bad", "audio_url": "file:///etc/passwd"},
+    )
+    assert response.status_code == 422
+
+
 def test_story_source_is_the_contributor_not_the_reviewer():
     kimberley = get_waypoint("kimberley")
     response = client.get(
