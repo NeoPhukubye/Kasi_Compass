@@ -17,12 +17,12 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from app.story_engine.content_store import get_story, get_story_source, get_pois
-from app.story_engine.geofence import find_triggered_waypoint, route_progress_fraction
+from app.story_engine.content_store import get_story, get_story_source, get_pois, get_stop_content
+from app.story_engine.geofence import check_geofence, find_triggered_waypoint, route_progress_fraction
 from app.story_engine.live_share import RIDER_ID_PATTERN, live_position_store
 from app.story_engine.memories import (
     DEFAULT_MEMORIES_LIMIT,
@@ -276,3 +276,49 @@ def nearby_memories(
     """
     _validate_coordinates(lat, lon)
     return [MemoryResponse(**m.as_dict()) for m in memory_store.memories_near(lat, lon, radius, limit)]
+
+# ---------------------------------------------------------------------
+# Story-engine discovery + geofence verification (CLI/frontend surfaces).
+#
+# A separate router so the discovery endpoints don't crowd the /journey
+# prefix that the map and Companion Mode depend on. Both consume the same
+# engines as everything else here — content_store and geofence — so there
+# is one source of truth, not a parallel implementation.
+# ---------------------------------------------------------------------
+
+story_engine_router = APIRouter(prefix="/story-engine", tags=["Story Engine"])
+
+@story_engine_router.get("/stop/{stop_id}")
+def stop_content(stop_id: str) -> dict:
+    """Fetch the historical narrative, heritage sites, local stalls, and
+    geofence coordinates for a specific Shosholoza Meyl stop."""
+    content = get_stop_content(stop_id)
+    if not content:
+        raise HTTPException(status_code=404, detail="Stop content not found.")
+    return {"status": "success", "data": content}
+
+@story_engine_router.get("/geofence/verify")
+def verify_geofence(
+    user_lat: float = Query(...),
+    user_lon: float = Query(...),
+    target_lat: float = Query(...),
+    target_lon: float = Query(...),
+    radius: float = Query(100.0, ge=1, le=50_000),
+) -> dict:
+    """Verify live telemetry (rider in an Uber/transit vehicle) against a
+    stop's coordinates: returns whether the user is within `radius` meters
+    of the target point, with the inputs echoed in `metrics`."""
+    _validate_coordinates(user_lat, user_lon)
+    _validate_coordinates(target_lat, target_lon)
+    is_inside = check_geofence(user_lat, user_lon, target_lat, target_lon, radius)
+    return {
+        "status": "success",
+        "inside_geofence": is_inside,
+        "metrics": {
+            "user_location": {"lat": user_lat, "lon": user_lon},
+            "target_location": {"lat": target_lat, "lon": target_lon},
+            "threshold_radius_m": radius,
+        },
+    }
+
+app.include_router(story_engine_router)
