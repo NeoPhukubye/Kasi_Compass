@@ -51,7 +51,8 @@ Every stop carries a curated *historical* story (see the content model below) �
 Following direct feedback from Geekulcha organizers to align this build "more to a sense of reality" and reduce AI reliance, the content pipeline has been redesigned:
 
 - **Every story is authored and reviewed by a human** — sourced from local narrators, heritage sites, and tourism-board partners along the route (see `backend/app/story_engine/content_store.py`, where every entry carries a `source` and `reviewed_by` field).
-- **AI has exactly one allowed role**: drafting a first-pass translation of an already human-approved story into another official South African language, for a human (ideally first-language speaker) to review before it's ever published. AI is never called at request time — nothing in the runtime request path depends on an AI service being available.
+- **AI has exactly one allowed role in the content pipeline**: drafting a first-pass translation of an already human-approved story into another official South African language, for a human (ideally first-language speaker) to review before it's ever published. AI is never called at request time for stories — nothing in the runtime story path depends on an AI service being available.
+- **One carefully-gated exception — the Companion Mode Route Guide** (`POST /story-engine/ask`, `backend/app/story_engine/guide.py`): when the operator sets `GEMINI_API_KEY` server-side, the request-time guide *may* ask Gemini to rephrase a grounded, human-reviewed route answer. The key is read only on the backend (`os.environ`), never shipped to the browser, and **any** failure (no key, network error, empty answer, invalid model) degrades to the fully-written corpus answer with `"ai_used": false`. There is no invented content and no hard dependency: the unsent journalistic commitment — a human answers for the corridor — stands even when the model is unavailable.
 - This removes AI-outage/hallucination risk from the critical path entirely, and keeps the commitment to telling each place's story with input from people who actually live there.
 
 #### How the AI-assisted translation is implemented
@@ -72,7 +73,7 @@ Step 2 — approve python3 tools/translate_stories.py apply --draft translation_
                  -> prints a ready-to-paste LocalizedStory block for the reviewer to commit
 ```
 
-The guardrails are covered by tests (`backend/tests/test_translation_tool.py`), including one that parses `api.py` to assert the running service imports neither the translation tool nor any AI SDK. Running the app with `GEMINI_API_KEY` unset is a **supported, fully-functional state**: the API returns human-reviewed stories with no key and no network, which is what makes the TRL 4 "no AI in the request path" claim verifiable rather than aspirational.
+The guardrails are covered by tests (`backend/tests/test_translation_tool.py`), including one that parses `api.py` to assert the running service imports neither the translation tool nor any AI SDK. Running the app with `GEMINI_API_KEY` unset is a **supported, fully-functional state**: the API returns human-reviewed stories with no key and no network, and the Route Guide answers purely from its corpus (`"ai_used": false`), which is what makes the TRL 4 "no AI in the request path" claim verifiable rather than aspirational.
 
 > **Note on the map:** the map deliberately uses **MapLibre GL JS with OpenStreetMap tiles**, not Google Maps. This needs no API key and no billing account, so the animated map works offline in the lab and can't leak a key from public frontend JavaScript. A Google Maps key shipped in `frontend/js/` would be readable by anyone and billable by anyone — so the map stays on MapLibre.
 
@@ -113,9 +114,9 @@ Per organizer guidance to build to **TRL 4** ahead of the hackathon weekend, thi
 - A single running FastAPI service (`app/story_engine/api.py`) that wires the route data, geofence engine, and human-sourced content store together into one request path -- `GET /journey/position?lat=...&lon=...` returns the correct triggered waypoint *and* its human-reviewed story in one call, with no manual glue code between modules.
 - **End-to-end integration tests** (`backend/tests/test_integration.py`) that exercise this actual running app via `TestClient` -- real HTTP requests in, real JSON responses out -- including a test that confirms every returned story carries a human reviewer, not an AI attribution.
 - **Rider memories over HTTP** (`POST`/`GET /journey/memories`, `GET /journey/memories/nearby`) — new memories created by riders at a stop and relived by later travellers, geofence-unlockable at the exact spot they were left; validated end-to-end (unknown waypoint, blank text, malformed rider id, bad coordinates all 422).
-- **Stop discovery + live-telemetry geofence** (`GET /story-engine/stop/{id}`, `GET /story-engine/geofence/verify`, CLI in `backend/tools/stop_lookup.py`) — the Shosholoza corridor's narrative, heritage sites, stalls, and coordinates for every stop, plus proximity verification for a rider approaching a stop (default 100m radius).
+- **Stop discovery + live-telemetry geofence** (`GET /story-engine/stop/{id}`, `GET /story-engine/geofence/verify`, CLI in `backend/tools/stop_lookup.py`) — the Shosholoza corridor's narrative, heritage sites, stalls, and coordinates for every stop, plus proximity verification for a rider approaching a stop (default 100m radius) and the route-aware **Companion Mode Route Guide** (`POST /story-engine/ask`) that answers rider questions from the human-reviewed corpus (Gemini-rephrased only where a server-side key is set).
 - **Guardrail tests for the AI-assisted translation path** (`backend/tests/test_translation_tool.py`) — verifies the running API imports no AI SDK, that drafts can't be applied without human review, and that AI-looking reviewer names are rejected.
-- **89/89 tests passing** across all seven suites (story engine, content store, route, live share, memories, translation tool, integration).
+- **100/100 tests passing** across all eight suites (story engine, content store, route, live share, memories, translation tool, integration, guide).
 
 **Not yet reached (TRL 5+):**
 - No live GPS feed from an actual train -- Companion Mode is validated against known coordinates in this lab environment, not yet tested onboard a moving train.
@@ -179,6 +180,7 @@ backend/
     geofence.py         # Haversine-based story trigger engine
     content_store.py    # Human-sourced, human-reviewed story content
     memories.py         # Rider-shared memories ("create new / relive old")
+    guide.py            # Route Guide: corpus answers, optional Gemini rephrase
     api.py               # Integrated FastAPI service (TRL 4 evidence)
   tools/
     translate_stories.py   # OFFLINE Gemini drafts for human review — not in request path
@@ -187,6 +189,7 @@ backend/
     test_story_engine.py     # Unit tests (TRL 3 evidence)
     test_integration.py       # End-to-end integration tests (TRL 4 evidence)
     test_memories.py          # Rider memories store (create + relive + validation)
+    test_guide.py              # Route Guide matching, corpus grounding, Gemini fallback
     test_translation_tool.py  # AI-guardrail tests (human review, no AI in runtime)
   .env.example          # GEMINI_API_KEY template (copy to .env, which is gitignored)
 frontend/
