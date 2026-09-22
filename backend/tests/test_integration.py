@@ -13,7 +13,10 @@ Run with: pytest backend/tests/test_integration.py
 
 from fastapi.testclient import TestClient
 
+import pytest
+
 from app.story_engine.api import app
+from app.story_engine.memories import memory_store
 from app.story_engine.route import get_waypoint
 
 client = TestClient(app)
@@ -174,3 +177,91 @@ def test_leave_endpoint_removes_rider_from_shared_positions():
     seen_by_b = client.get("/journey/shared-positions", params={"rider_id": RIDER_B})
     rider_ids = [p["rider_id"] for p in seen_by_b.json()]
     assert RIDER_A not in rider_ids
+
+# ---------------------------------------------------------------------
+# Rider memories — "new generation creates new memories, older generation
+# relives old ones" — end-to-end through the actual API.
+# ---------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def empty_memory_store():
+    memory_store.clear()
+    yield
+    memory_store.clear()
+
+
+def test_create_memory_then_relive_it_for_the_waypoint():
+    create = client.post(
+        "/journey/memories",
+        json={
+            "rider_id": RIDER_A,
+            "waypoint_id": "kimberley",
+            "text": " The Big Hole at sunrise — my grandmother worked nearby in the sixties.",
+        },
+    )
+    assert create.status_code == 201
+    body = create.json()
+    assert body["waypoint_id"] == "kimberley"
+    assert body["rider_id"] == RIDER_A
+    # Input is stripped by the store.
+    assert body["text"].startswith("The Big Hole")
+    assert body["memory_id"]
+    assert body["created_at"] > 0
+
+    # The "older generation relives old memories" path: the memory comes back
+    # through GET for that stop, newest first.
+    listed = client.get("/journey/memories", params={"waypoint_id": "kimberley"})
+    assert listed.status_code == 200
+    bodies = listed.json()
+    assert len(bodies) == 1
+    assert bodies[0]["text"].startswith("The Big Hole")
+
+
+def test_list_memories_is_newest_first_and_filters_by_waypoint():
+    client.post("/journey/memories", json={"rider_id": RIDER_A, "waypoint_id": "kimberley", "text": "first"})
+    client.post("/journey/memories", json={"rider_id": RIDER_B, "waypoint_id": "de_aar", "text": "karoo"})
+
+    all_memories = client.get("/journey/memories")
+    assert [m["text"] for m in all_memories.json()] == ["karoo", "first"]
+
+    kimberley_only = client.get("/journey/memories", params={"waypoint_id": "kimberley"})
+    assert [m["text"] for m in kimberley_only.json()] == ["first"]
+
+
+def test_create_memory_validations_return_422():
+    # Unknown waypoint.
+    response = client.post(
+        "/journey/memories",
+        json={"rider_id": RIDER_A, "waypoint_id": "narnia", "text": "hello"},
+    )
+    assert response.status_code == 422
+
+    # Blank text.
+    response = client.post(
+        "/journey/memories",
+        json={"rider_id": RIDER_A, "waypoint_id": "kimberley", "text": "   "},
+    )
+    assert response.status_code == 422
+
+    # Non-UUID rider id — rejected at schema validation before the store.
+    response = client.post(
+        "/journey/memories",
+        json={"rider_id": "not-a-uuid", "waypoint_id": "kimberley", "text": "hello"},
+    )
+    assert response.status_code == 422
+
+
+def test_list_memories_rejects_unknown_waypoint():
+    response = client.get("/journey/memories", params={"waypoint_id": "narnia"})
+    assert response.status_code == 422
+
+
+def test_story_source_is_the_contributor_not_the_reviewer():
+    kimberley = get_waypoint("kimberley")
+    response = client.get(
+        "/journey/position", params={"lat": kimberley.latitude, "lon": kimberley.longitude}
+    )
+    body = response.json()
+    # The seeded story's contributor is the heritage-site partner, not the
+    # pending reviewer — story_source must never be the reviewer attribution.
+    assert body["story_source"] == "Kimberley Big Hole & Diamond Museum (pilot partner outreach pending)"
