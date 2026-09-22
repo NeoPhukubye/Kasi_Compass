@@ -518,19 +518,17 @@ async function handleGuideSubmit(event) {
 
     appendGuideMessage('user', question);
     els.guideInput.value = '';
-    els.guideStatus.textContent = 'Consulting the route archives...';
+    els.guideStatus.textContent = 'Consulting the live Gemini guide...';
 
     try {
-        const result = await askGuide(question);
-        appendGuideMessage('ai', result.answer);
-        els.guideStatus.textContent = result.ai_used
-            ? 'Drafted by Gemini, grounded in our route corpus.'
-            : 'Answered from the human-reviewed route corpus.';
+        const result = await companionChat(question);
+        appendGuideMessage('ai', result.reply);
+        els.guideStatus.textContent = 'Answered by Gemini tour guide.';
     } catch (err) {
         console.error('Failed to reach the guide:', err);
         appendGuideMessage(
             'ai',
-            'The route guide is offline right now (backend not reachable). Start the backend and ask again.'
+            'The live guide is offline right now (backend not reachable or Gemini API key not configured). Start the backend with GEMINI_API_KEY and ask again.'
         );
         els.guideStatus.textContent = '';
     }
