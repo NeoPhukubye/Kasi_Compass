@@ -40,10 +40,11 @@ A different privacy category from geofence triggering (which only ever checks a 
 
 Every stop carries a curated *historical* story (see the content model below) — that's the old memory of a place. Riders also leave *new* memories that the next traveller can relive:
 
-- **Create (`POST /journey/memories`)** — a rider passing a stop drops a first-person memory (text, bounded to 2,000 chars, keyed to an anonymous opaque rider UUID — no name, no session).
-- **Relive (`GET /journey/memories`)** — newest-first memories for a waypoint (or the whole route), the rider-voice companion to the curator's story at the same stop.
-- **Validation** — memories can only attach to real waypoints; unknown ids, blank/oversized text, and malformed rider ids are rejected (422). The store is bounded (oldest evicted) so a demo process can't grow without limit.
-- **Persistence plan** — the in-memory `MemoryStore` (`backend/app/story_engine/memories.py`) is the documented swap target for a PostGIS `rider_memories` table; the module docstring includes the production schema and the interface the DB-backed store must keep so `api.py` doesn't change.
+- **Create (`POST /journey/memories`)** — a rider passing a stop drops a first-person memory (text, bounded to 2,000 chars, keyed to an anonymous opaque rider UUID — no name, no session). It can be **pinned to the exact spot** it was left (`lat`/`lon`, always together) and can reference a hosted **voice note** via `audio_url`.
+- **Relive by stop (`GET /journey/memories`)** — newest-first memories for a waypoint (or the whole route).
+- **Relive by proximity (`GET /journey/memories/nearby`)** — the geofenced unlock: a new-generation rider passing through only surfaces memories dropped within `radius` meters of their live position, so a memory left on the Big Hole platform doesn't have to compete with the whole town. The Memory Vault made literal.
+- **Validation** — memories can only attach to real waypoints; unknown ids, blank/oversized text, half-provided or out-of-range coordinates, malformed rider ids, and non-http(s) `audio_url` are rejected (422). The store is bounded (oldest evicted) so a demo process can't grow without limit.
+- **Persistence plan** — the in-memory `MemoryStore` (`backend/app/story_engine/memories.py`) is the documented swap target for a PostGIS `rider_memories` table (schema includes `lat`/`lon`, `audio_url`, and a spatial index for unlock lookups); the module docstring has the full interface the DB-backed store must keep so `api.py` doesn't change.
 
 ### Content model: human-sourced first, AI assistive only
 
