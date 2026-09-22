@@ -372,6 +372,28 @@ def get_pois(waypoint_id: str) -> list[PointOfInterest]:
 # ---------------------------------------------------------------------
 
 SHOSHOLOZA_ROUTE_STORIES: dict[str, dict] = {
+    "pretoria": {
+        "stop_name": "Pretoria Station",
+        "historical_narrative": (
+            "The journey's northern gateway: Union Buildings on the hill, jacaranda-lined "
+            "streets, and the old Capital Park railway workshops where generations repaired "
+            "the locomotives that carried the country's traffic south."
+        ),
+        "heritage_sites": [
+            {
+                "name": "Union Buildings",
+                "era": "Early 20th Century",
+                "description": "The seat of South Africa's executive, in terraced gardens above Pretoria.",
+            }
+        ],
+        "local_stalls": [
+            {
+                "name": "Pretoria Station Vendors",
+                "category": "Food & Goods",
+                "description": "Travel essentials, newspapers, and snacks for departing passengers.",
+            }
+        ],
+    },
     "johannesburg_park": {
         "stop_name": "Johannesburg Park Station",
         "historical_narrative": (
