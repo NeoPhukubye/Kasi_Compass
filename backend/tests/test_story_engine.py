@@ -5,6 +5,7 @@ Run with: pytest backend/tests/test_story_engine.py
 """
 
 from app.story_engine.geofence import (
+    check_geofence,
     find_triggered_waypoint,
     haversine_meters,
     next_waypoint_after,
@@ -82,3 +83,17 @@ def test_route_progress_fraction_midpoint_roughly_central():
     de_aar = get_waypoint("de_aar")
     fraction = route_progress_fraction(de_aar.latitude, de_aar.longitude)
     assert 0.3 < fraction < 0.7
+
+
+def test_check_geofence_inside_and_outside_radius():
+    # ~0.01deg of latitude is ~1.1km.
+    assert check_geofence(-28.7353, 24.7697, -28.7353, 24.7697, radius_meters=100.0) is True
+    assert check_geofence(-28.7353, 24.7697, -28.7353 + 0.01, 24.7697, radius_meters=100.0) is False
+    # A generous radius catches the same offset point.
+    assert check_geofence(-28.7353, 24.7697, -28.7353 + 0.01, 24.7697, radius_meters=2_000.0) is True
+
+def test_check_geofence_defaults_to_100m_bundle_radius():
+    kimberley = get_waypoint("kimberley")
+    # ~0.002deg latitude is ~223m — outside the 100m default radius.
+    assert check_geofence(kimberley.latitude, kimberley.longitude,
+                          kimberley.latitude + 0.002, kimberley.longitude) is False
