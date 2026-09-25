@@ -30,6 +30,7 @@ module is an explicitly user-invoked, key-gated optional layer on top.
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 
@@ -39,7 +40,13 @@ from app.story_engine.content_store import SHOSHOLOZA_ROUTE_STORIES, get_stop_co
 # stdlib only, keeping requirements.txt lean (same reason the translation
 # tool uses urllib instead of the google-genai SDK).
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-DEFAULT_MODEL = "gemini-3.6-flash"
+
+# Read from the environment so the deployed model can be changed without a
+# code change, falling back to a real one. The previous fallback
+# ("gemini-3.6-flash") was not a model that exists, so every Gemini-backed
+# call failed with a 404 from Google while the corpus fallback silently
+# absorbed it — which looked like the feature working.
+DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "").strip() or "gemini-2.5-flash"
 
 # How a question maps to a stop in the corpus. Keys are the query words and
 # name fragments users are likely to type; values are corpus stop ids.
