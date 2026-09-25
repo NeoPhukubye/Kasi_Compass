@@ -33,7 +33,7 @@ except ImportError:
 
 ai_router = APIRouter(prefix="/story-engine", tags=["Story Engine — AI"])
 
-DEFAULT_MODEL = "gemini-3.6-flash"
+DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "").strip() or "gemini-2.5-flash"
 
 
 class CompanionChatRequest(BaseModel):
