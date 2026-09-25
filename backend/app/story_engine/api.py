@@ -16,14 +16,26 @@ integration test rather than another unit test in a trenchcoat.
 from __future__ import annotations
 
 import os
+import time
+import uuid
+from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from app.story_engine import spatial
 from app.story_engine.content_store import get_story, get_story_source, get_pois, get_stop_content
+from app.story_engine.eta import simulate_corridor_run
 from app.story_engine.geofence import check_geofence, find_triggered_waypoint, route_progress_fraction
 from app.story_engine.guide import answer_question
+from app.story_engine.journey import (
+    GUARDIAN_TOKEN_PATTERN,
+    JOURNEY_ID_PATTERN,
+    POSITION_SOURCES,
+    is_valid_journey_id,
+    journey_registry,
+)
 from app.story_engine.live_share import RIDER_ID_PATTERN, live_position_store
 from app.story_engine.memories import (
     DEFAULT_MEMORIES_LIMIT,
@@ -31,12 +43,40 @@ from app.story_engine.memories import (
     memory_store,
 )
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
+from app.story_engine.tickets import (
+    MAX_TICKET_HOLD_HOURS,
+    TicketValidationError,
+    is_valid_reference,
+    normalize_reference,
+    ticket_store,
+)
 
 # AI endpoints are imported lazily to keep the core runtime API
 # independent of Google Generative AI SDK (see test_runtime_api_does_not_import_the_ai_tool).
 # The ai_router is included only when the module is available.
 
-app = FastAPI(title="Kasi Compass — Train Journey Mapper (lab integration)")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """
+    Bring the spatial layer up before the first request is served.
+
+    Seeding the corridor here rather than lazily per request means the first
+    request after a cold start does not pay for schema creation, and a schema
+    failure surfaces at boot — where a deploy log can show it — instead of as
+    a 500 to a family member's browser. The store also self-heals on connect
+    (see SpatialStore.connect), so this is a head start, not the only guard.
+    """
+    spatial.spatial_store.ensure_schema()
+    spatial.spatial_store.corridor_nodes(refresh=True)
+    yield
+    spatial.spatial_store.close()
+
+
+app = FastAPI(
+    title="Kasi Compass — Train Journey Mapper (lab integration)",
+    lifespan=lifespan,
+)
 
 # Reuse live_share's pattern verbatim (as a plain string) so the UUID shape
 # enforced at the request schema and the one enforced in the store can never
@@ -69,6 +109,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# The spatial layer (PostGIS when DATABASE_URL is set, SQLite otherwise) owns
+# the corridor geometry and journey telemetry, and is brought up by the
+# lifespan handler above. ensure_schema() seeds from route.py and is
+# idempotent, so a restart against an existing SQLite file re-upserts the same
+# eight stations without duplicating rows.
 
 class JourneyPositionResponse(BaseModel):
     triggered: bool
@@ -281,6 +327,473 @@ def nearby_memories(
     """
     _validate_coordinates(lat, lon)
     return [MemoryResponse(**m.as_dict()) for m in memory_store.memories_near(lat, lon, radius, limit)]
+
+# ---------------------------------------------------------------------
+# Spatial layer — corridor geometry and telemetry.
+#
+# This is the "PostgreSQL + PostGIS for route geometry" claim, exposed. The
+# same endpoints serve the live PostGIS deployment and the SQLite fallback
+# the demo runs on, so what a judge sees is the real contract rather than a
+# mock.
+# ---------------------------------------------------------------------
+
+@app.get("/spatial/corridor")
+def corridor_geometry() -> dict:
+    """
+    The corridor centreline as an ordered coordinate list, plus per-station
+    metadata (province, sequence, distance from Pretoria) that the map, the
+    milestone tracker and the ETA engine all read from. Same source of truth
+    for all three — there is no second route definition anywhere.
+    """
+    return spatial.spatial_store.corridor_geometry()
+
+
+class ResolvePositionRequest(BaseModel):
+    lat: float
+    lon: float
+
+
+@app.post("/spatial/resolve")
+def resolve_position(payload: ResolvePositionRequest) -> dict:
+    """
+    Snap an arbitrary position onto the corridor centreline.
+
+    On PostGIS this is a genuine spatial query (ST_ClosestPoint /
+    ST_LineLocatePoint against a geography LineString); on SQLite the same
+    answer is computed by along-track projection in-process. Both return the
+    identical payload, including which driver answered it, so a client can
+    tell "we are running the fallback" from "this is wrong".
+    """
+    _validate_coordinates(payload.lat, payload.lon)
+    return spatial.spatial_store.resolve_position(payload.lat, payload.lon).as_dict()
+
+# ---------------------------------------------------------------------
+# Journey Guardian — server-side journeys, corridor-fed position, and the
+# family tracking link that the pitch's "peace of mind" claim rests on.
+# ---------------------------------------------------------------------
+
+class CreateJourneyRequest(BaseModel):
+    journey_id: str | None = Field(default=None, pattern=JOURNEY_ID_PATTERN)
+    origin_waypoint_id: str = "pretoria"
+    destination_waypoint_id: str = "cape_town"
+    ticket_reference: str | None = None
+    holder_label: str = Field(default="", max_length=80)
+
+class JourneyResponse(BaseModel):
+    journey_id: str
+    corridor_id: str
+    origin_waypoint_id: str
+    destination_waypoint_id: str
+    created_at: float
+    ticket_id: str | None
+    guardian_link_count: int
+
+class IssueGuardianLinkRequest(BaseModel):
+    display_name: str = Field(default="", max_length=80)
+    label: str = Field(default="family", max_length=40)
+
+class GuardianLinkResponse(BaseModel):
+    token: str
+    journey_id: str
+    created_at: float
+    revoked: bool
+    label: str
+    display_name: str
+    share_url: str
+
+class ReportPositionRequest(BaseModel):
+    """
+    A position report for a journey.
+
+    `source` is the field that carries the product's central claim. When it
+    is `corridor` or `operator`, the position came from infrastructure, and
+    the journey keeps updating even if the passenger's phone is dead. We
+    cannot verify who is reporting — that is a trust boundary, not an
+    oversight — so the family view always surfaces the last source, and never
+    claims a freshness it does not have.
+    """
+    journey_id: str = Field(pattern=JOURNEY_ID_PATTERN)
+    lat: float
+    lon: float
+    source: str = Field(default="corridor")
+    speed_mps: float | None = Field(default=None, ge=0, le=120)
+    recorded_at: float | None = None
+
+class JourneyEtaResponse(BaseModel):
+    journey_id: str
+    status: str
+    position: dict | None
+    observed_speed_kmh: float
+    speed_source: str
+    eta: dict
+    delay_hours: float
+    delay_display: str
+    province: str
+    next_province: str | None
+    distance_to_next_station_km: float
+    last_report_seconds_ago: float | None
+    last_report_source: str | None
+    milestones: list[dict]
+
+
+def _resolve_known_waypoint(waypoint_id: str, field_name: str) -> None:
+    if waypoint_id not in {w.id for w in PRETORIA_TO_CAPE_TOWN}:
+        raise HTTPException(status_code=422, detail=f"unknown {field_name}: {waypoint_id!r}")
+
+
+@app.post("/guardian/journeys", response_model=JourneyResponse, status_code=201)
+def create_journey(payload: CreateJourneyRequest) -> JourneyResponse:
+    """
+    Open a tracked journey on the corridor. The journey id is client-supplied
+    (UUID-shaped) or generated, and carries no passenger identity — it is a
+    handle, not a profile.
+
+    If a valid booking reference is supplied, it is boarded against this
+    journey, which is what binds the journey to the ticketing system: after
+    this call the journey exists server-side, independently of the device.
+    """
+    _resolve_known_waypoint(payload.origin_waypoint_id, "origin_waypoint_id")
+    _resolve_known_waypoint(payload.destination_waypoint_id, "destination_waypoint_id")
+
+    journey_id = payload.journey_id or str(uuid.uuid4())
+    ticket_id = None
+
+    if payload.ticket_reference:
+        if not is_valid_reference(payload.ticket_reference):
+            raise HTTPException(
+                status_code=422,
+                detail=f"ticket_reference must match the operator format (e.g. 'AB12 CDE'), got {payload.ticket_reference!r}",
+            )
+        try:
+            ticket = ticket_store.board(payload.ticket_reference, journey_id=journey_id)
+        except TicketValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        ticket_id = ticket.ticket_id
+
+    journey = journey_registry.create_journey(
+        journey_id=journey_id,
+        origin_waypoint_id=payload.origin_waypoint_id,
+        destination_waypoint_id=payload.destination_waypoint_id,
+        ticket_id=ticket_id,
+    )
+    return JourneyResponse(**journey.as_dict())
+
+
+@app.get("/guardian/journeys/{journey_id}/eta", response_model=JourneyEtaResponse)
+def journey_eta(journey_id: str) -> JourneyEtaResponse:
+    """
+    The ETA, delay and milestone list for a journey.
+
+    Returns 200 with status "no_data" for a journey that has never reported a
+    position — a family link opened for a train that has not started moving
+    should read "waiting", not 404.
+    """
+    if not is_valid_journey_id(journey_id):
+        raise HTTPException(status_code=422, detail="journey_id must be UUID-shaped")
+    return JourneyEtaResponse(**journey_registry.eta_for(journey_id))
+
+
+@app.post("/guardian/journeys/{journey_id}/position", response_model=JourneyEtaResponse)
+def report_journey_position(journey_id: str, payload: ReportPositionRequest) -> JourneyEtaResponse:
+    """
+    Push a position report for a journey and get back the recomputed ETA.
+
+    The point of this endpoint is that the caller is infrastructure, not the
+    passenger. See ReportPositionRequest for why we surface the source rather
+    than pretending otherwise.
+    """
+    if not is_valid_journey_id(journey_id):
+        raise HTTPException(status_code=422, detail="journey_id must be UUID-shaped")
+    if journey_id != payload.journey_id:
+        raise HTTPException(status_code=422, detail="journey_id in path and body must match")
+    if payload.source not in POSITION_SOURCES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"source must be one of {', '.join(POSITION_SOURCES)}; got {payload.source!r}",
+        )
+    _validate_coordinates(payload.lat, payload.lon)
+
+    result = journey_registry.report_position(
+        journey_id=journey_id,
+        lat=payload.lat,
+        lon=payload.lon,
+        source=payload.source,
+        speed_mps=payload.speed_mps,
+        recorded_at=payload.recorded_at,
+    )
+    return JourneyEtaResponse(**result["eta"])
+
+
+@app.post("/guardian/journeys/{journey_id}/links", response_model=GuardianLinkResponse, status_code=201)
+def issue_guardian_link(journey_id: str, payload: IssueGuardianLinkRequest) -> GuardianLinkResponse:
+    """
+    Mint a family tracking link: a read-only capability token bound to this
+    journey alone.
+
+    This is the "direct-to-family sharing via instant SMS and WhatsApp
+    tracking links" distribution channel. The token carries no name, no
+    contact details and no rider id, and it can be revoked the moment the
+    rider decides the journey is no longer theirs to broadcast.
+    """
+    if not is_valid_journey_id(journey_id):
+        raise HTTPException(status_code=422, detail="journey_id must be UUID-shaped")
+    if journey_registry.get_journey(journey_id) is None:
+        raise HTTPException(status_code=404, detail=f"unknown journey_id: {journey_id}")
+
+    try:
+        link = journey_registry.issue_link(
+            journey_id=journey_id,
+            display_name=payload.display_name,
+            label=payload.label,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    share_url = f"{os.environ.get('PUBLIC_FRONTEND_URL', '').rstrip('/')}/track.html#token={link.token}"
+    return GuardianLinkResponse(**link.as_dict(), share_url=share_url)
+
+
+class FamilyViewResponse(BaseModel):
+    tracking: dict
+    journey: dict
+    eta: JourneyEtaResponse
+    status: str
+    headline: str
+
+
+@app.get("/guardian/track/{token}", response_model=FamilyViewResponse)
+def family_view(token: str) -> FamilyViewResponse:
+    """
+    What a family member sees when they open a tracking link.
+
+    Read-only, scoped to one journey, and honest about its own limits: the
+    `headline` is a plain-language sentence, `last_report_source` says where
+    the last position came from, and a stale feed reports itself as stale
+    rather than showing a confidently frozen dot.
+
+    An unknown or revoked token is a 404, not a 403 — we do not confirm that
+    a given token ever existed.
+    """
+    if not GUARDIAN_TOKEN_PATTERN.match(token):
+        raise HTTPException(status_code=404, detail="guardian link not found")
+    try:
+        view = journey_registry.family_view(token)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FamilyViewResponse(**view)
+
+
+@app.delete("/guardian/links/{token}", status_code=204)
+def revoke_guardian_link(token: str) -> Response:
+    """
+    Revoke a family link immediately. The family member's next poll 404s,
+    rather than continuing to receive a position until some TTL lapses.
+    """
+    if not journey_registry.revoke_link(token):
+        raise HTTPException(status_code=404, detail="guardian link not found")
+    return Response(status_code=204)
+
+
+@app.get("/guardian/telemetry/{journey_id}")
+def journey_telemetry(journey_id: str, limit: int = Query(default=20, ge=1, le=500)) -> dict:
+    """
+    Raw position reports for a journey, oldest first. This is the audit trail
+    behind the ETA — a rider who disputes "you said you were 3h late" gets
+    the actual reports, with timestamps and sources, not just a conclusion.
+    """
+    if not is_valid_journey_id(journey_id):
+        raise HTTPException(status_code=422, detail="journey_id must be UUID-shaped")
+    points = spatial.spatial_store.recent_telemetry(journey_id, limit=limit)
+    return {
+        "journey_id": journey_id,
+        "driver": spatial.spatial_store.driver,
+        "count": len(points),
+        "points": [p.as_dict() for p in points],
+    }
+
+
+class SimulateRunRequest(BaseModel):
+    journey_id: str | None = Field(default=None, pattern=JOURNEY_ID_PATTERN)
+    start_waypoint_id: str = "johannesburg_park"
+    speed_kmh: float = Field(default=62.0, ge=5.0, le=140.0)
+    step_minutes: float = Field(default=30.0, ge=1.0, le=720.0)
+    steps: int = Field(default=6, ge=1, le=7)
+
+class SimulateRunResponse(BaseModel):
+    journey_id: str
+    points_recorded: int
+    eta: JourneyEtaResponse
+
+
+@app.post("/guardian/simulate-run", response_model=SimulateRunResponse, status_code=201)
+def simulate_run(payload: SimulateRunRequest) -> SimulateRunResponse:
+    """
+    Generate a server-side corridor feed for a journey.
+
+    This is the demo path for the pitch's hardest claim. Without a train
+    available, a judge can watch an ETA move, a province boundary flip and a
+    family link update from a feed the passenger's phone never touches —
+    which is precisely the failure mode (a dead battery in the Karoo) that
+    makes the product necessary.
+
+    Positions are interpolated along the real corridor between real stations,
+    so every distance, ETA and milestone derived from them is arithmetically
+    true of the actual line rather than a random walk.
+    """
+    _resolve_known_waypoint(payload.start_waypoint_id, "start_waypoint_id")
+    journey_id = payload.journey_id or str(uuid.uuid4())
+
+    journey_registry.create_journey(
+        journey_id=journey_id,
+        origin_waypoint_id=payload.start_waypoint_id,
+    )
+    simulate_corridor_run(
+        journey_id=journey_id,
+        start_waypoint_id=payload.start_waypoint_id,
+        speed_kmh=payload.speed_kmh,
+        step_minutes=payload.step_minutes,
+        steps=payload.steps,
+    )
+    return SimulateRunResponse(
+        journey_id=journey_id,
+        points_recorded=len(spatial.spatial_store.recent_telemetry(journey_id, limit=500)),
+        eta=JourneyEtaResponse(**journey_registry.eta_for(journey_id)),
+    )
+
+# ---------------------------------------------------------------------
+# Ticket validation — the "bound to ticket validation databases" claim.
+# ---------------------------------------------------------------------
+
+class IssueTicketRequest(BaseModel):
+    origin_waypoint_id: str = "pretoria"
+    destination_waypoint_id: str = "cape_town"
+    holder_label: str = Field(default="", max_length=80)
+    booking_reference: str | None = None
+    valid_hours: float = Field(default=48.0, ge=0.5, le=MAX_TICKET_HOLD_HOURS)
+
+class TicketResponse(BaseModel):
+    ticket_id: str
+    booking_reference: str
+    corridor_id: str
+    origin_waypoint_id: str
+    destination_waypoint_id: str
+    issued_at: float
+    valid_from: float
+    valid_until: float
+    holder_label: str
+    status: str
+    expired: bool
+    journey_id: str | None
+    validation_count: int
+
+class ValidateTicketRequest(BaseModel):
+    booking_reference: str
+
+class ValidationResponse(BaseModel):
+    admissible: bool
+    reason: str
+    ticket: TicketResponse
+
+class VoidTicketRequest(BaseModel):
+    booking_reference: str
+    reason: str = Field(default="", max_length=200)
+
+
+@app.post("/tickets", response_model=TicketResponse, status_code=201)
+def issue_ticket(payload: IssueTicketRequest) -> TicketResponse:
+    """
+    Issue a corridor ticket. No personal data and no payment processing —
+    this is the reference model of the operator's booking system, not a
+    replacement for it, and it deliberately stops at the boundary.
+    """
+    _resolve_known_waypoint(payload.origin_waypoint_id, "origin_waypoint_id")
+    _resolve_known_waypoint(payload.destination_waypoint_id, "destination_waypoint_id")
+    try:
+        ticket = ticket_store.issue(
+            corridor_id="pretoria_cape_town",
+            origin_waypoint_id=payload.origin_waypoint_id,
+            destination_waypoint_id=payload.destination_waypoint_id,
+            holder_label=payload.holder_label,
+            booking_reference=payload.booking_reference,
+            valid_hours=payload.valid_hours,
+        )
+    except TicketValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return TicketResponse(**ticket.as_dict())
+
+
+@app.post("/tickets/validate", response_model=ValidationResponse)
+def validate_ticket(payload: ValidateTicketRequest) -> ValidationResponse:
+    """
+    Check a booking reference at the gate without consuming it.
+
+    Returns `admissible: false` with a plain-language `reason` for a voided,
+    already-used, or expired ticket, so a conductor's scanner and a family
+    member's browser read the same refusal in the same words.
+    """
+    try:
+        result = ticket_store.validate(payload.booking_reference)
+    except TicketValidationError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ValidationResponse(**result)
+
+
+@app.post("/tickets/board", response_model=TicketResponse)
+def board_ticket(payload: ValidateTicketRequest) -> TicketResponse:
+    """
+    Consume a ticket at boarding, binding it to a journey. One-way: a used
+    ticket cannot be boarded twice, which is what makes the journey's
+    server-side identity durable.
+    """
+    try:
+        ticket = ticket_store.board(payload.booking_reference)
+    except TicketValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return TicketResponse(**ticket.as_dict())
+
+
+@app.post("/tickets/void", response_model=TicketResponse)
+def void_ticket(payload: VoidTicketRequest) -> TicketResponse:
+    """Void a ticket. Terminal — a photo of a cancelled booking is worth nothing."""
+    try:
+        ticket = ticket_store.void(payload.booking_reference, reason=payload.reason)
+    except TicketValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return TicketResponse(**ticket.as_dict())
+
+
+@app.get("/tickets/{booking_reference}")
+def fetch_ticket(booking_reference: str) -> TicketResponse:
+    """Fetch a ticket by booking reference. Reference matching is case- and
+    space-insensitive, because people type these off a screenshot."""
+    ticket = ticket_store.get_by_reference(booking_reference)
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"unknown booking reference: {normalize_reference(booking_reference)}",
+        )
+    return TicketResponse(**ticket.as_dict())
+
+
+@app.get("/health")
+def health() -> dict:
+    """
+    Liveness plus the one thing an operator actually needs to know after a
+    deploy: which spatial driver is live. `driver: "sqlite"` on a production
+    deployment means the PostGIS connection is not configured, and the ETA
+    numbers are being computed by the in-process fallback.
+    """
+    return {
+        "status": "ok",
+        "timestamp": time.time(),
+        "spatial_driver": spatial.spatial_store.driver,
+        "corridor_km": spatial.spatial_store.total_km(),
+        "active_journeys": len(journey_registry.journeys()),
+        "tracked_journeys": spatial.spatial_store.journey_count(),
+        "tickets_issued": ticket_store.count(),
+        "active_shared_riders": live_position_store.active_count(),
+    }
+
 
 # ---------------------------------------------------------------------
 # Story-engine discovery + geofence verification (CLI/frontend surfaces).
