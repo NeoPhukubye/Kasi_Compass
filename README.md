@@ -80,25 +80,47 @@ The guardrails are covered by tests (`backend/tests/test_translation_tool.py`), 
 ## 4. Technological Architecture
 
 ```
-Rider (Explorer or Companion Mode, web/PWA)
+Rider (Explorer or Companion Mode, web)          Family member (link, no install)
+        |                                                      |
+        v                                                      v
+FastAPI Gateway  (app/story_engine/api.py)        GET /guardian/track/{token}
+        |                                                      |
+        v                                                      v
+Story & Route Engine (Python)  ──────────────►  Journey Guardian + ETA engine
+  - Geofence trigger engine                          - corridor-fed telemetry
+  - Route/waypoint graph (real stations)              - observed-speed ETA + delay
+  - Human-sourced content store (no AI)              - provincial milestones
+  - Rider memories store (create / relive)            - one plain-language headline
         |
         v
-FastAPI Gateway  (app/story_engine/api.py)
-        |
-        v
-Story & Route Engine (Python)
-  - Geofence trigger engine (haversine distance vs. waypoint radius)
-  - Route/waypoint graph (real Pretoria-Cape Town stations + coordinates)
-  - Human-sourced content store (no AI call in the runtime path)
-  - Rider memories store (create new / relive old — PostGIS in production)
-        |
-        v
-PostGIS (production) / in-process data (current lab build)
+Spatial layer (app/story_engine/spatial.py)
+  - PostGIS when DATABASE_URL is set (ST_ClosestPoint / ST_LineLocatePoint
+    against a geography LineString, GiST-indexed)
+  - Identical API contract on SQLite otherwise, with the same along-track
+    projection computed in-process — so the demo needs no infrastructure
         |
         v
 MapLibre animated frontend (train position animates along the real route;
 human-authored story cards surface as each waypoint is reached)
 ```
+
+### Why the spatial layer has two drivers
+
+The pitch's hardest claim is that a journey keeps reporting itself from
+infrastructure rather than from the passenger's phone — a phone at 4% with
+no signal in the Karoo must not decide whether a family knows anything.
+
+`SpatialStore` answers that on PostGIS, and answers it identically on SQLite.
+Both return the same `CorridorPosition`, so `eta.py`, `journey.py` and the
+API never branch on which database is live, and `GET /health` reports which
+one answered. Nothing needs to be provisioned to run the project; set
+`DATABASE_URL` and the corridor geometry, telemetry and ETA move onto real
+spatial queries.
+
+`POST /guardian/simulate-run` exists for the same reason: with no train
+available, a server-side feed can be generated along the real corridor so a
+judge can watch an ETA move, a province flip and a family link update from a
+feed the passenger's phone never touches.
 
 ## 5. Technology Readiness Level: TRL 4
 
@@ -116,11 +138,17 @@ Per organizer guidance to build to **TRL 4** ahead of the hackathon weekend, thi
 - **Rider memories over HTTP** (`POST`/`GET /journey/memories`, `GET /journey/memories/nearby`) — new memories created by riders at a stop and relived by later travellers, geofence-unlockable at the exact spot they were left; validated end-to-end (unknown waypoint, blank text, malformed rider id, bad coordinates all 422).
 - **Stop discovery + live-telemetry geofence** (`GET /story-engine/stop/{id}`, `GET /story-engine/geofence/verify`, CLI in `backend/tools/stop_lookup.py`) — the Shosholoza corridor's narrative, heritage sites, stalls, and coordinates for every stop, plus proximity verification for a rider approaching a stop (default 100m radius) and the route-aware **Companion Mode Route Guide** (`POST /story-engine/ask`) that answers rider questions from the human-reviewed corpus (Gemini-rephrased only where a server-side key is set).
 - **Guardrail tests for the AI-assisted translation path** (`backend/tests/test_translation_tool.py`) — verifies the running API imports no AI SDK, that drafts can't be applied without human review, and that AI-looking reviewer names are rejected.
-- **100/100 tests passing** across all eight suites (story engine, content store, route, live share, memories, translation tool, integration, guide).
+- **Spatial layer with a real database contract** (`app/story_engine/spatial.py`) — corridor centreline materialised as a `geography LineString` with a GiST index, journey telemetry in a queryable table, and along-track position resolution via `ST_ClosestPoint`/`ST_LineLocatePoint` on PostGIS. Served through an identical SQLite contract so it runs with zero infrastructure, and `GET /health` reports which driver is live.
+- **Automated ETA and provincial milestones** (`app/story_engine/eta.py`, `GET /guardian/journeys/{id}/eta`) — ETA from *observed* speed, smoothed with an EWMA, compared against the timetable to produce an explicit delay figure. A stopped train or a dark feed returns **no ETA at all** plus a plain-language reason, rather than a confident guess; `speed_source` says whether a number was measured or assumed.
+- **Journey Guardian with corridor-fed position** (`app/story_engine/journey.py`) — a journey's identity lives server-side, created and advanced by position reports from the corridor. The API cannot verify who is reporting, so it is explicit about it: every report carries a `source`, and the family view surfaces the most recent one and never claims a freshness it does not have.
+- **Family tracking links** (`POST /guardian/journeys/{id}/links`, `GET /guardian/track/{token}`, `DELETE /guardian/links/{token}`, page `frontend/track.html`) — a read-only capability token bound to one journey, carrying no name or contact details, revocable immediately. The link is the WhatsApp-shareable artefact: paste it, the family member sees one plain-language sentence, the province, the delay and the milestone list, with no app and no account.
+- **Ticket validation** (`app/story_engine/tickets.py`, `POST /tickets`, `/tickets/validate`, `/tickets/board`, `/tickets/void`) — the model behind "bound to ticket validation databases". No personal data and no payment processing. Transitions are one-way, so a photo of a used or cancelled ticket is worth nothing; boarding binds a ticket to a journey, which is what makes that journey's identity durable independently of any device.
+- **195/195 tests passing** across eleven suites (story engine, content store, route, live share, memories, translation tool, guide, spatial, eta, journey/tickets, guardian API, integration).
 
 **Not yet reached (TRL 5+):**
 - No live GPS feed from an actual train -- Companion Mode is validated against known coordinates in this lab environment, not yet tested onboard a moving train.
 - No user testing yet with real riders -- that's the explicit purpose of the Phase 3 closed pilot below.
+- Guardian tokens live in process memory, so a redeploy invalidates links that have already been sent. Journey *positions* are persisted and survive restarts; revocable capability tokens in a database table is the obvious next step once there is a real operator integration.
 - Story content coverage is currently 2 of 8 waypoints (Kimberley, Matjiesfontein) pending partner outreach -- see WBS Phase 1.
 
 ## 6. User Journey Story
@@ -181,6 +209,10 @@ backend/
     content_store.py    # Human-sourced, human-reviewed story content
     memories.py         # Rider-shared memories ("create new / relive old")
     guide.py            # Route Guide: corpus answers, optional Gemini rephrase
+    spatial.py          # PostGIS/SQLite corridor geometry + journey telemetry
+    eta.py              # Observed-speed ETA, delay, provincial milestones
+    journey.py          # Journey Guardian + family tracking links
+    tickets.py          # Ticket validation (one-way states, no personal data)
     api.py               # Integrated FastAPI service (TRL 4 evidence)
   tools/
     translate_stories.py   # OFFLINE Gemini drafts for human review — not in request path
@@ -191,16 +223,25 @@ backend/
     test_memories.py          # Rider memories store (create + relive + validation)
     test_guide.py              # Route Guide matching, corpus grounding, Gemini fallback
     test_translation_tool.py  # AI-guardrail tests (human review, no AI in runtime)
-  .env.example          # GEMINI_API_KEY template (copy to .env, which is gitignored)
+    test_spatial.py           # Corridor geometry, along-track projection, persistence
+    test_eta.py               # ETA refusal cases, milestones, staleness
+    test_journey.py           # Guardian links + ticket validation invariants
+    test_guardian_api.py      # Spatial/Guardian/ticket endpoints through the app
+  .env.example          # GEMINI_API_KEY, DATABASE_URL and SQLITE_PATH template
+  requirements-postgis.txt  # Optional psycopg driver for the PostGIS path
 frontend/
+  index.html           # Main app: map, story cards, Guardian panel, Memory Vault
+  track.html           # Family tracking page (read-only, link-token in the hash)
   js/geo.js             # Shared haversine + along-track progress interpolation
   js/map.js             # MapLibre map, route, markers, animation
   js/app.js             # Mode switching, GPS, story cards
   js/api.js             # Backend API client
+  js/guardian.js        # Corridor feed, ETA panel, guardian links, Memory Vault
+  js/track.js           # Family tracking view
 planning/
   Kasi_Compass_WBS.xlsx   # Full work breakdown structure with dates/owners
 ```
 
 Run tests: `cd backend && PYTHONPATH=. python3 -m pytest tests/ -v`
 
-The app runs with **no API key at all** — that is a supported state. `GEMINI_API_KEY` is needed only for the offline translation tool.
+The app runs with **no API key at all** — that is a supported state. `GEMINI_API_KEY` is needed only for the offline translation tool, and `DATABASE_URL` only to switch the spatial layer from SQLite to PostGIS. Check which one is live at `GET /health`.
