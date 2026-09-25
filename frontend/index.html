@@ -150,6 +150,59 @@
                 </div>
                 <p id="progress-text" aria-live="polite">Ready to begin</p>
             </div>
+
+            <section id="guardian" role="region" aria-labelledby="guardian-title">
+                <h3 id="guardian-title">Journey Guardian</h3>
+                <p class="panel-note">
+                    Start a corridor feed to see a journey tracked by infrastructure rather than by
+                    a phone. The tracking link keeps working after you close this page.
+                </p>
+                <div class="guardian-controls">
+                    <label for="guardian-start">Feed starts from</label>
+                    <select id="guardian-start">
+                        <option value="pretoria">Pretoria</option>
+                        <option value="johannesburg_park" selected>Johannesburg (Park Station)</option>
+                        <option value="kimberley">Kimberley</option>
+                        <option value="de_aar">De Aar</option>
+                    </select>
+                    <button id="btn-start-feed">Start corridor feed</button>
+                    <button id="btn-stop-feed" class="hidden">Stop</button>
+                </div>
+                <p id="guardian-status" class="guardian-status" aria-live="polite"></p>
+
+                <div id="guardian-panel" class="hidden">
+                    <p id="guardian-headline" class="guardian-headline" role="status"></p>
+                    <dl id="guardian-facts" class="guardian-facts"></dl>
+
+                    <h4>Provincial milestones</h4>
+                    <ol id="guardian-milestones" class="milestone-list"></ol>
+
+                    <h4>Family tracking link</h4>
+                    <p class="panel-note">Read-only, scoped to this journey, revocable at any time.</p>
+                    <p id="guardian-share-url" class="share-url"></p>
+                    <button id="btn-copy-link">Copy link</button>
+                </div>
+            </section>
+
+            <section id="memory-vault" role="region" aria-labelledby="memory-title">
+                <h3 id="memory-title">Memory Vault</h3>
+                <p class="panel-note">
+                    Memories riders left at a stop. New travellers unlock them by passing through.
+                </p>
+                <div class="memory-controls">
+                    <label for="memory-waypoint">Stop</label>
+                    <select id="memory-waypoint">
+                        <option value="">All stops</option>
+                    </select>
+                </div>
+                <form id="memory-form">
+                    <input id="memory-input" type="text" placeholder="Leave a memory at this stop" autocomplete="off" aria-label="Memory text">
+                    <button type="submit">Save</button>
+                </form>
+                <p id="memory-status" class="memory-status" aria-live="polite"></p>
+                <p id="memory-empty" class="panel-note">No memories here yet. Be the first.</p>
+                <ul id="memory-list" class="memory-list"></ul>
+            </section>
         </main>
 
         <footer role="contentinfo">
@@ -162,6 +215,7 @@
     <script src="js/api.js"></script>
     <script src="js/live-share.js"></script>
     <script src="js/map.js"></script>
+    <script src="js/guardian.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
