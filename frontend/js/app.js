@@ -108,7 +108,14 @@ function init() {
     window.onJourneyComplete = onJourneyComplete;
     window.onWaypointClick = onWaypointClick;
 
-    
+    // Journey Guardian panel + Memory Vault. Both are additive to the
+    // journey experience above, so a failure here must not take the map
+    // down with it.
+    try {
+        initGuardian();
+    } catch (err) {
+        console.error('Guardian panel failed to initialise:', err);
+    }
 }
 
 function handleKeydown(e) {
@@ -546,17 +553,25 @@ async function handleGuideSubmit(event) {
 
     appendGuideMessage('user', question);
     els.guideInput.value = '';
-    els.guideStatus.textContent = 'Consulting the live Gemini guide...';
+    els.guideStatus.textContent = 'Checking the route corpus...';
 
+    // /story-engine/ask is the endpoint that actually works with no API key:
+    // it answers from the human-reviewed corpus and only reaches for Gemini
+    // if the backend has a key configured. Calling /companion/chat directly
+    // meant the guide 503'd for every user who had not configured one, and
+    // the corpus fallback — the whole "grounded, never invents a fact"
+    // promise — was unreachable from the UI.
     try {
-        const result = await companionChat(question);
-        appendGuideMessage('ai', result.reply);
-        els.guideStatus.textContent = 'Answered by Gemini tour guide.';
+        const result = await askGuide(question);
+        appendGuideMessage('ai', result.answer);
+        els.guideStatus.textContent = result.ai_used
+            ? 'Answered by Gemini, grounded in the route corpus.'
+            : 'Answered from the human-reviewed route corpus.';
     } catch (err) {
         console.error('Failed to reach the guide:', err);
         appendGuideMessage(
             'ai',
-            'The live guide is offline right now (backend not reachable or Gemini API key not configured). Start the backend with GEMINI_API_KEY and ask again.'
+            'The route guide is unreachable right now. Check that the backend is running, then ask again.'
         );
         els.guideStatus.textContent = '';
     }
