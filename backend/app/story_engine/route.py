@@ -27,6 +27,12 @@ class Waypoint:
     longitude: float
     story_theme: str
     is_approximate: bool = False
+    # The province this waypoint sits in. Drives the Journey Guardian's
+    # provincial milestone tracking (eta.py) — a rider crossing into a new
+    # province is the single most reassuring signal we can push to a family
+    # member watching from home, because it is a real, checkable, human
+    # landmark on a corridor where everything else is a dot on a map.
+    province: str = ""
 
 
 # Ordered north (Pretoria) to south (Cape Town).
@@ -38,6 +44,7 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         longitude=28.2293,
         story_theme="Journey's start: Union Buildings, jacaranda season, and the old Capital Park railway workshops.",
         is_approximate=True,
+        province="Gauteng",
     ),
     Waypoint(
         id="johannesburg_park",
@@ -45,6 +52,7 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         latitude=-26.1972,
         longitude=28.0419,
         story_theme="Gold-rush origins of Johannesburg and the historic Park Station terminus.",
+        province="Gauteng",
     ),
     Waypoint(
         id="kimberley",
@@ -52,6 +60,7 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         latitude=-28.7353,
         longitude=24.7697,
         story_theme="The 1870s diamond rush, the Big Hole, and the town that built De Beers.",
+        province="Northern Cape",
     ),
     Waypoint(
         id="de_aar",
@@ -59,6 +68,7 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         latitude=-30.6508,
         longitude=24.0133,
         story_theme="The great Karoo rail junction — where lines to Cape Town, Port Elizabeth, and Namibia once met.",
+        province="Northern Cape",
     ),
     Waypoint(
         id="beaufort_west",
@@ -67,6 +77,7 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         longitude=22.5811,
         story_theme="The Karoo's oldest town and gateway to the Karoo National Park.",
         is_approximate=True,
+        province="Western Cape",
     ),
     Waypoint(
         id="matjiesfontein",
@@ -75,6 +86,7 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         longitude=20.5833,
         story_theme="A perfectly preserved Victorian-era Karoo refreshment stop, still lit by gas lamps.",
         is_approximate=True,
+        province="Western Cape",
     ),
     Waypoint(
         id="worcester",
@@ -82,6 +94,7 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         latitude=-33.6464,
         longitude=19.4487,
         story_theme="Gateway to the Cape Winelands and the dramatic Hex River Valley mountain pass.",
+        province="Western Cape",
     ),
     Waypoint(
         id="cape_town",
@@ -89,8 +102,17 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         latitude=-33.9222,
         longitude=18.4264,
         story_theme="Journey's end: Table Mountain, the Atlantic, and 1,600km behind you.",
+        province="Western Cape",
     ),
 ]
+
+# Every province the corridor touches, in the order a northbound-to-southbound
+# rider first enters them. Used by eta.py to drive the "you have now entered
+# the Karoo" milestone that the Journey Guardian pushes to a family link.
+CORRIDOR_PROVINCES: list[str] = []
+for _waypoint in PRETORIA_TO_CAPE_TOWN:
+    if _waypoint.province and (not CORRIDOR_PROVINCES or CORRIDOR_PROVINCES[-1] != _waypoint.province):
+        CORRIDOR_PROVINCES.append(_waypoint.province)
 
 
 def get_waypoint(waypoint_id: str) -> Waypoint | None:
