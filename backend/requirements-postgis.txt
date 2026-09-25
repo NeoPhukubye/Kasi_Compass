@@ -1,0 +1,14 @@
+# Optional: the PostGIS driver for the spatial layer.
+#
+# The project runs with no database at all — set nothing and the identical
+# API contract is served by the in-process SQLite store, which is what the
+# demo and CI use. Install this and point DATABASE_URL at a PostgreSQL
+# instance with PostGIS available to move the corridor geometry, journey
+# telemetry and ETA onto real spatial queries
+# (ST_ClosestPoint / ST_LineLocatePoint against a geography LineString).
+#
+#   pip install -r requirements-postgis.txt
+#   export DATABASE_URL=postgresql://user:pass@host:5432/kasi_compass
+#
+# Check GET /health afterwards: `spatial_driver` should read "postgis".
+psycopg[binary]>=3.1.0
