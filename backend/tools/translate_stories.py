@@ -284,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "draft":
             _load_env_file(BACKEND_ROOT / ".env")
             api_key = _get_api_key()
-            model = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash").strip()
+            model = os.environ.get("GEMINI_MODEL", "").strip() or "gemini-2.5-flash"
 
             waypoint_ids = [args.waypoint] if args.waypoint else list(STORY_CONTENT)
             languages = args.language or [
