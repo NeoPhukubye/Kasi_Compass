@@ -752,3 +752,219 @@ body {
     font-size: 0.9em;
     color: #555;
 }
+
+/* ---------------------------------------------------------------------
+   Journey Guardian, family tracking view, and Memory Vault.
+   Same token set as the rest of the app so the new surfaces read as part
+   of the product rather than bolted on.
+   --------------------------------------------------------------------- */
+
+#guardian,
+#memory-vault {
+    background: var(--white);
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 8px var(--shadow);
+    margin: 1.5rem 0;
+    padding: 1.25rem;
+}
+
+#guardian h3,
+#memory-vault h3 {
+    margin-top: 0;
+    color: var(--primary);
+}
+
+.guardian-controls,
+.memory-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+
+.guardian-status,
+.memory-status,
+.track-status {
+    font-size: 0.9em;
+    color: var(--text-light);
+    min-height: 1.2em;
+    margin: 0.5rem 0;
+}
+
+.guardian-status[data-tone="ok"],
+.memory-status[data-tone="ok"] {
+    color: var(--primary-light);
+    font-weight: 600;
+}
+
+.guardian-status[data-tone="warn"],
+.memory-status[data-tone="warn"] {
+    color: #a63d1f;
+    font-weight: 600;
+}
+
+.guardian-headline {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin: 0.75rem 0;
+}
+
+.guardian-facts {
+    display: grid;
+    grid-template-columns: minmax(9rem, auto) 1fr;
+    gap: 0.35rem 1rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.95rem;
+}
+
+.guardian-facts dt {
+    color: var(--text-light);
+}
+
+.guardian-facts dd {
+    margin: 0;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.share-url {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    background: var(--bg);
+    border: 1px dashed var(--primary-light);
+    border-radius: var(--radius);
+    padding: 0.6rem;
+    word-break: break-all;
+    user-select: all;
+}
+
+/* Milestone timeline: a plain ordered list, with the reached ones marked.
+   A vertical rail reads as a journey without needing a charting library. */
+.milestone-list {
+    list-style: none;
+    margin: 0.5rem 0 1.25rem;
+    padding: 0;
+    border-left: 2px solid var(--shadow);
+}
+
+.milestone {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.35rem 0 0.35rem 0.9rem;
+    position: relative;
+    color: var(--text-light);
+}
+
+.milestone-marker {
+    position: absolute;
+    left: -6px;
+    top: 0.85rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--white);
+    border: 2px solid var(--text-light);
+}
+
+.milestone.reached {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.milestone.reached .milestone-marker {
+    background: var(--primary-light);
+    border-color: var(--primary-light);
+}
+
+.milestone[data-kind="province_entry"].reached .milestone-marker {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.milestone-distance {
+    margin-left: auto;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--text-light);
+}
+
+.memory-list {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0;
+}
+
+.memory {
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--bg);
+}
+
+.memory:last-child {
+    border-bottom: none;
+}
+
+.memory-text {
+    margin: 0 0 0.25rem;
+}
+
+.memory-meta {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-light);
+    text-transform: capitalize;
+}
+
+.memory-loading {
+    color: var(--text-light);
+    font-style: italic;
+}
+
+#memory-form {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+#memory-form input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    font: inherit;
+}
+
+/* Family tracking view */
+#track-view {
+    text-align: center;
+    padding: 2rem 1rem 1rem;
+}
+
+#track-headline {
+    color: var(--primary);
+    font-size: 1.4rem;
+    max-width: 34rem;
+    margin: 0.5rem auto;
+}
+
+#track-not-found {
+    background: var(--white);
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    padding: 2rem;
+    margin: 2rem auto;
+    max-width: 34rem;
+    text-align: center;
+}
+
+#track-detail {
+    background: var(--white);
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin: 1.5rem auto;
+    max-width: 44rem;
+}
