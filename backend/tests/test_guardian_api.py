@@ -215,6 +215,33 @@ def test_offline_pack_is_self_contained():
     assert pack["next_waypoint"]["waypoint_id"] == "worcester"
 
 
+def test_every_stop_has_a_story_in_its_offline_pack():
+    """
+    Only two of the eight corridor stations have a written ride-along story.
+    The pack falls back to the stop's historical narrative rather than
+    shipping an empty field, because a rider reaching a stop in a dead zone
+    with no story at all is the failure this whole feature exists to prevent.
+    """
+    for stop_id in ["pretoria", "johannesburg_park", "de_aar", "worcester", "cape_town"]:
+        pack = client.get(f"/journey/offline-pack?waypoint_id={stop_id}").json()
+        assert pack["story"]["text"], f"{stop_id} has no story"
+        assert pack["story"]["kind"] in ("ride-along story", "stop narrative")
+
+
+def test_the_story_fallback_is_labelled_rather_than_passed_off_as_fuller_content():
+    pack = client.get("/journey/offline-pack?waypoint_id=de_aar").json()
+    # de Aar has no ride-along story written yet; the UI must be able to tell
+    # the rider which kind of text they are reading.
+    assert pack["story"]["kind"] == "stop narrative"
+    assert pack["story"]["text"] == pack["stop_content"]["historical_narrative"]
+
+
+def test_a_written_ride_along_story_takes_precedence_over_the_narrative():
+    pack = client.get("/journey/offline-pack?waypoint_id=kimberley").json()
+    assert pack["story"]["kind"] == "ride-along story"
+    assert pack["story"]["text"] != pack["stop_content"]["historical_narrative"]
+
+
 def test_offline_pack_rejects_an_unknown_stop():
     assert client.get("/journey/offline-pack?waypoint_id=atlantis").status_code == 422
 
