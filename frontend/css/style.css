@@ -936,6 +936,243 @@ footer {
     min-height: 56px;
 }
 
+/* Zulzi station-hub commerce */
+#zulzi-panel {
+    background: var(--white);
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 8px var(--shadow);
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+}
+
+#zulzi-panel h3 {
+    margin-top: 0;
+    color: var(--primary);
+    font-size: 1.5rem;
+}
+
+.zulzi-stops,
+.zulzi-cart-fields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+
+.zulzi-stops label,
+.zulzi-cart-fields label {
+    font-size: 1rem;
+    color: var(--text-light);
+    font-weight: 600;
+}
+
+#zulzi-stop,
+#zulzi-carriage,
+#zulzi-seat {
+    padding: 0.7rem;
+    border: 2px solid var(--shadow);
+    border-radius: var(--radius);
+    font: inherit;
+    font-size: 1.1rem;
+    min-height: 48px;
+}
+
+#zulzi-stop {
+    flex: 1 1 200px;
+}
+
+.zulzi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0;
+}
+
+.zulzi-vendor-card,
+.zulzi-menu-item,
+.zulzi-cart-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.8rem;
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    background: var(--bg);
+}
+
+.zulzi-vendor-card {
+    flex-direction: column;
+    align-items: flex-start;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.zulzi-vendor-card:hover {
+    border-color: var(--primary-light);
+}
+
+.zulzi-vendor-name {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.zulzi-vendor-meta {
+    font-size: 0.95rem;
+    color: var(--text-light);
+}
+
+.zulzi-back {
+    background: transparent;
+    color: var(--primary);
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    padding: 0.4rem 0;
+    font-size: 1rem;
+}
+
+.zulzi-item-info {
+    flex: 1;
+}
+
+.zulzi-item-desc {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-top: 0.15rem;
+}
+
+.zulzi-item-price {
+    font-weight: 700;
+    color: var(--primary);
+    white-space: nowrap;
+}
+
+.zulzi-add {
+    background: var(--primary-light);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    padding: 0.5rem 0.9rem;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 44px;
+}
+
+.zulzi-add:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.zulzi-cart {
+    margin: 1rem 0;
+}
+
+.zulzi-cart-line-name {
+    font-weight: 600;
+    flex: 1;
+}
+
+.zulzi-qty-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.zulzi-qty {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--shadow);
+    border-radius: 4px;
+    background: var(--white);
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.zulzi-cart-line-total {
+    font-weight: 700;
+    min-width: 70px;
+    text-align: right;
+}
+
+.zulzi-remove {
+    background: transparent;
+    border: none;
+    color: #a63d1f;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0 0.3rem;
+}
+
+.zulzi-cart-total {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin: 0.5rem 0;
+}
+
+.zulzi-cart-fields input {
+    flex: 1 1 120px;
+    padding: 0.7rem;
+    border: 2px solid var(--shadow);
+    border-radius: var(--radius);
+    font: inherit;
+    font-size: 1.1rem;
+    min-height: 48px;
+}
+
+#zulzi-place-order {
+    background: var(--accent);
+    color: var(--text);
+    font-weight: 700;
+}
+
+#zulzi-place-order:hover:not(:disabled) {
+    background: var(--accent-light);
+    color: var(--text);
+}
+
+.zulzi-secondary {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--shadow);
+}
+
+.zulzi-secondary:hover:not(:disabled) {
+    background: #e8e8e0;
+}
+
+.zulzi-order-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.zulzi-status {
+    font-size: 1.1rem;
+    color: var(--text-light);
+    min-height: 1.2em;
+    margin: 0.5rem 0;
+}
+
+.zulzi-status[data-tone="ok"] {
+    color: var(--primary-light);
+    font-weight: 700;
+}
+
+.zulzi-status[data-tone="warn"] {
+    color: #a63d1f;
+    font-weight: 700;
+}
+
+
 /* Family tracking view */
 #track-view {
     text-align: center;
