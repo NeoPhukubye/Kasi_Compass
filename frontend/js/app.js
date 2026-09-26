@@ -170,6 +170,7 @@ function initPrasa() {
 function beginJourney() {
     document.getElementById('hero').style.display = 'none';
     document.getElementById('map-container').style.display = 'block';
+    document.getElementById('language-switcher').classList.remove('hidden');
 
     initMap();
     loadRoute();
