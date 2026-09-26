@@ -10,15 +10,44 @@ Coordinates for major stations (Kimberley, De Aar, Worcester, Cape Town)
 are sourced from published station records. Coordinates for the remaining
 waypoints are town-center approximations suitable for an MVP geofence demo
 (a production system would source these from surveyed station locations,
-not town centroids) — see the `is_approximate` flag on each waypoint.
+not town centroids) — see the is_approximate flag on each waypoint.
+
+Cultural and tourism metadata
+-----------------------------
+Every waypoint carries a cultural block describing the local attractions,
+indigenous stories, historical waypoints, and cultural touchpoints the
+brief asks us to surface. This is the data the story engine, the guide,
+and the map popups all draw from — one source of truth so a heritage site
+cannot be described differently in three places.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
 # Shared geospatial constants — defined once here so geofence.py and
-# live_share.py can't drift apart on the physical values they assume.
+# live_share.py cannot drift apart on the physical values they assume.
 EARTH_RADIUS_METERS = 6_371_000
 METERS_PER_DEGREE_LATITUDE = 111_320
+
+
+@dataclass(frozen=True)
+class CulturalMetadata:
+    """Local attractions, stories, and touchpoints for one station.
+
+    Fields are deliberately optional: not every stop has a museum, and not
+    every museum has an audio guide. The story engine composes what exists
+    rather than inventing gaps.
+    """
+
+    summary: str = ""
+    heritage_sites: tuple[str, ...] = ()
+    cultural_touchpoints: tuple[str, ...] = ()
+    indigenous_stories: tuple[str, ...] = ()
+    local_cuisine: tuple[str, ...] = ()
+    festivals: tuple[str, ...] = ()
+    visitor_notes: str = ""
+
+
 @dataclass(frozen=True)
 class Waypoint:
     id: str
@@ -27,24 +56,31 @@ class Waypoint:
     longitude: float
     story_theme: str
     is_approximate: bool = False
-    # The province this waypoint sits in. Drives the Journey Guardian's
-    # provincial milestone tracking (eta.py) — a rider crossing into a new
-    # province is the single most reassuring signal we can push to a family
-    # member watching from home, because it is a real, checkable, human
-    # landmark on a corridor where everything else is a dot on a map.
     province: str = ""
+    cultural: CulturalMetadata = field(default_factory=CulturalMetadata)
 
 
 # Ordered north (Pretoria) to south (Cape Town).
+# The Free State is included explicitly — the brief names it as a province
+# the corridor must cover, and the earlier draft skipped it entirely.
 PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
     Waypoint(
         id="pretoria",
         name="Pretoria",
         latitude=-25.7479,
         longitude=28.2293,
-        story_theme="Journey's start: Union Buildings, jacaranda season, and the old Capital Park railway workshops.",
+        story_theme="Journey start: Union Buildings, jacaranda season, and the old Capital Park railway workshops.",
         is_approximate=True,
         province="Gauteng",
+        cultural=CulturalMetadata(
+            summary="South Africa's administrative capital, famous for its purple jacaranda trees and the Voortrekker Monument.",
+            heritage_sites=("Union Buildings", "Voortrekker Monument", "Capital Park Station"),
+            cultural_touchpoints=("Pretoria Art Museum", "Jacaranda City Festival"),
+            indigenous_stories=("The Mamelodi township's role in the anti-apartheid struggle.",),
+            local_cuisine=("Biltong and boerewors from Capital Park vendors",),
+            festivals=("Jacaranda Day, every November",),
+            visitor_notes="Free entry to the Union Buildings; jacarandas peak in late October.",
+        ),
     ),
     Waypoint(
         id="johannesburg_park",
@@ -61,6 +97,24 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         longitude=24.7697,
         story_theme="The 1870s diamond rush, the Big Hole, and the town that built De Beers.",
         province="Northern Cape",
+    ),
+    Waypoint(
+        id="bloemfontein",
+        name="Bloemfontein",
+        latitude=-29.0852,
+        longitude=26.1596,
+        story_theme="Judicial capital of South Africa and the heart of the Free State — the National Women's Monument and the Anglo-Boer War concentration camp memorial.",
+        is_approximate=True,
+        province="Free State",
+        cultural=CulturalMetadata(
+            summary="The judicial capital of South Africa, in the middle of the Free State. Known for its rose-growing industry and the Naval Hill viewpoint.",
+            heritage_sites=("National Women's Monument", "Naval Hill", "Bloemfontein National Museum"),
+            cultural_touchpoints=("Free State Zulu Community", "Rose Valley Festival"),
+            indigenous_stories=("The Free State's role in the Anglo-Boer War and the story of the Basotho people.",),
+            local_cuisine=("Potjiekos and braai from the surrounding townships",),
+            festivals=("Bloemfontein Rose Festival, every October",),
+            visitor_notes="Naval Hill offers a panoramic view of the city and is home to a small game reserve.",
+        ),
     ),
     Waypoint(
         id="de_aar",
