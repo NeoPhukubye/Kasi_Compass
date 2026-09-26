@@ -171,10 +171,106 @@ def test_simulate_run_produces_a_usable_journey_and_link():
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["points_recorded"] == 6
+    # One report of the origin station, then one per step of movement.
+    assert body["points_recorded"] == 7
     assert body["eta"]["observed_speed_kmh"] == pytest.approx(62, rel=0.05)
     # A freshly simulated run must not immediately read as a dead feed.
     assert body["eta"]["status"] != "signal_lost"
+
+
+def test_a_full_corridor_run_completes_the_passport():
+    run = client.post(
+        "/guardian/simulate-run",
+        json={"start_waypoint_id": "pretoria", "steps": 50, "step_minutes": 30},
+    ).json()
+    passport = client.get(f"/guardian/journeys/{run['journey_id']}/passport").json()
+    assert passport["stamps_earned"] == passport["stamps_total"] == 8
+    assert passport["complete"] is True
+    assert passport["provinces_visited"] == ["Gauteng", "Northern Cape", "Western Cape"]
+
+
+def test_passport_endpoint_rejects_a_non_uuid_journey_id():
+    assert client.get("/guardian/journeys/mthabo/passport").status_code == 422
+
+
+def test_passport_for_a_journey_that_never_reported_is_empty_not_an_error():
+    body = client.get("/guardian/journeys/99999999-9999-4999-8999-999999999999/passport").json()
+    assert body["stamps"] == []
+    assert body["complete"] is False
+
+
+# ---------------------------------------------------------------------
+# Offline story pack
+# ---------------------------------------------------------------------
+
+def test_offline_pack_is_self_contained():
+    pack = client.get("/journey/offline-pack?waypoint_id=matjiesfontein").json()
+    # Everything a rider needs at a stop, in one response, because a dead
+    # zone means a four-request story never loads.
+    assert pack["waypoint_id"] == "matjiesfontein"
+    assert pack["story"]["text"]
+    assert pack["pois"]
+    assert pack["stop_content"]["historical_narrative"]
+    assert pack["stop_content"]["era_years"] == ["1970", "1990", "2023"]
+    assert pack["next_waypoint"]["waypoint_id"] == "worcester"
+
+
+def test_offline_pack_rejects_an_unknown_stop():
+    assert client.get("/journey/offline-pack?waypoint_id=atlantis").status_code == 422
+
+
+def test_offline_pack_carries_a_waypoint_position():
+    pack = client.get("/journey/offline-pack?waypoint_id=kimberley").json()
+    assert pack["position"]["lat"] == pytest.approx(-28.7353)
+    assert pack["progress_fraction"] > 0
+
+
+# ---------------------------------------------------------------------
+# QR boarding
+# ---------------------------------------------------------------------
+
+def test_ticket_qr_encodes_a_payload_with_no_personal_data():
+    reference = client.post("/tickets", json={"holder_label": "Ms Ndlovu"}).json()["booking_reference"]
+    body = client.get(f"/tickets/{reference}/qr").json()
+    assert body["booking_reference"] == reference
+    assert reference in body["payload"]
+    assert "pretoria_cape_town" in body["payload"]
+    # A boarding code is readable by anyone who points a phone at it, so it
+    # must not carry the holder's label.
+    assert "Ms Ndlovu" not in body["payload"]
+
+
+def test_ticket_qr_renders_an_actual_qr_when_segno_is_installed():
+    reference = client.post("/tickets", json={}).json()["booking_reference"]
+    body = client.get(f"/tickets/{reference}/qr").json()
+    if not body["qr_available"]:
+        assert body["reason"]
+        return
+    assert body["qr_svg"].lstrip().startswith("<?xml")
+    assert "<svg" in body["qr_svg"]
+
+
+def test_scan_accepts_a_valid_ticket_and_refuses_a_voided_one():
+    reference = client.post("/tickets", json={}).json()["booking_reference"]
+    code = client.get(f"/tickets/{reference}/qr").json()
+    assert client.get(code["scan_path"]).json()["admissible"] is True
+
+    client.post("/tickets/void", json={"booking_reference": reference})
+    refused = client.get(code["scan_path"]).json()
+    assert refused["admissible"] is False
+    assert "voided" in refused["reason"].lower()
+
+
+def test_scan_of_an_unknown_reference_is_a_404():
+    assert client.get("/scan/ZZ99%20XXX").status_code == 404
+
+
+def test_qr_for_an_unknown_ticket_is_a_404():
+    assert client.get("/tickets/ZZ99%20XXX/qr").status_code == 404
+
+
+def test_health_reports_whether_qr_is_available():
+    assert isinstance(client.get("/health").json()["qr_available"], bool)
 
 
 def test_simulate_run_rejects_an_unknown_start():
