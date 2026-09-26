@@ -107,34 +107,6 @@ function setOfflineStatus(text, tone = 'info') {
     el.dataset.tone = tone;
 }
 
-function renderOfflineStatus() {
-    const list = document.getElementById('offline-cached');
-    if (!list) return;
-    list.innerHTML = '';
-    for (const waypointId of offlineState.cached) {
-        const item = document.createElement('li');
-        item.textContent = waypointId.replace(/_/g, ' ');
-        list.appendChild(item);
-    }
-
-    if (offlineState.cached.size === 0) {
-        setOfflineStatus(
-            offlineState.online
-                ? 'Nothing cached yet. Pick a stop above, then use the button to store it and the next one.'
-                : 'Offline with nothing cached — stories will not load until you reconnect.',
-            offlineState.online ? 'info' : 'warn'
-        );
-        return;
-    }
-
-    setOfflineStatus(
-        offlineState.online
-            ? `Ready for dead zones: ${offlineState.cached.size} stop(s) cached.`
-            : `Offline. ${offlineState.cached.size} cached stop(s) available.`,
-        offlineState.online ? 'ok' : 'warn'
-    );
-}
-
 /**
  * Read the stops that are actually stored, rather than trusting this page
  * load's memory of what it cached.
