@@ -58,6 +58,16 @@ function renderMilestones(milestones) {
 
 function renderView(view) {
     const eta = view.eta;
+    const dot = document.getElementById('status-dot');
+    const status = eta.status;
+    dot.className = 'status-dot';
+    if (status === 'on_time' || status === 'delayed' || status === 'arrived') {
+    dot.classList.add('green');
+    } else if (status === 'stopped' || status === 'no_data') {
+    dot.classList.add('amber');
+    } else if (status === 'signal_lost') {
+    dot.classList.add('red');
+    }
 
     document.getElementById('track-label').textContent =
         view.tracking.display_name || 'Live journey';
