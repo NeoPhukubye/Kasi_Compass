@@ -97,19 +97,6 @@
                 <div id="stop-panel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="stop-panel-title">
                     <button id="close-stop-panel" aria-label="Close stop insights">&times;</button>
                     <h3 id="stop-panel-title">Stop Insights</h3>
-                    <p id="stop-panel-archival" class="panel-note">
-                        Archival past &amp; present photography lands with heritage-site partner outreach
-                        (WBS Phase 1). Until then the Time Machine below shows a schematic reconstruction
-                        of each station's physical layout, drawn from the corridor's documented history —
-                        not a photograph.
-                    </p>
-                    <div id="timelapse-container" class="timelapse-container">
-                        <h5>Station Time Machine (<span id="selected-year">1970</span>)</h5>
-                        <input type="range" id="era-slider" min="0" max="2" step="1" value="0" aria-label="Select era" list="era-options">
-                        <datalist id="era-options"></datalist>
-                        <p id="era-description">Drag the slider to watch the station landscape evolve from the 1970s to the present day.</p>
-                        <div id="era-visual" role="group" aria-label="Station layout schematic for the selected era"></div>
-                    </div>
                     <h4 id="panel-stop-name"></h4>
                     <p id="panel-narrative" class="panel-narrative"></p>
                     <h5>Heritage Sites</h5>
@@ -292,7 +279,6 @@
     <script src="js/api.js"></script>
     <script src="js/live-share.js"></script>
     <script src="js/map.js"></script>
-    <script src="js/era-visual.js"></script>
     <script src="js/guardian.js"></script>
     <script src="js/offline.js"></script>
     <script src="js/app.js"></script>
