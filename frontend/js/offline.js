@@ -13,6 +13,12 @@ const offlineState = {
     online: navigator.onLine,
 };
 
+// Must match the service worker's cache name. The client writes into this
+// cache directly (a service worker cannot see a fetch it did not itself
+// intercept), so the two have to agree or the packs land somewhere the
+// offline path will never look.
+const CACHE_NAME = 'kasi-story-packs-v1';
+
 // Registering the worker is best-effort. A browser without service worker
 // support, or a page opened over file://, simply gets no offline packs —
 // which is a degraded experience, not a broken one.
@@ -50,7 +56,7 @@ async function cacheStoryPack(waypointId, language = 'en') {
             // Store under the same URL the service worker will match, so the
             // pack is actually reachable by a later intercept rather than
             // sitting in a cache nothing reads.
-            const cache = await caches.open('kasi-story-packs-v1');
+            const cache = await caches.open(CACHE_NAME);
             await cache.put(
                 `${window.KASI_API_BASE}/journey/offline-pack?${query.toString()}`,
                 new Response(JSON.stringify(pack), { headers: { 'Content-Type': 'application/json' } })
@@ -110,12 +116,55 @@ function renderOfflineStatus() {
         item.textContent = waypointId.replace(/_/g, ' ');
         list.appendChild(item);
     }
+
+    if (offlineState.cached.size === 0) {
+        setOfflineStatus(
+            offlineState.online
+                ? 'Nothing cached yet. Pick a stop above, then use the button to store it and the next one.'
+                : 'Offline with nothing cached — stories will not load until you reconnect.',
+            offlineState.online ? 'info' : 'warn'
+        );
+        return;
+    }
+
     setOfflineStatus(
         offlineState.online
-            ? `${offlineState.cached.size} stop(s) cached.`
-            : 'Offline — showing cached stories only.',
-        offlineState.online ? 'info' : 'warn'
+            ? `Ready for dead zones: ${offlineState.cached.size} stop(s) cached.`
+            : `Offline. ${offlineState.cached.size} cached stop(s) available.`,
+        offlineState.online ? 'ok' : 'warn'
     );
+}
+
+/**
+ * Read the stops that are actually stored, rather than trusting this page
+ * load's memory of what it cached.
+ *
+ * Cache Storage outlives the page but `offlineState.cached` does not, so
+ * without this the panel reported "0 stop(s) cached" after every reload even
+ * with packs sitting in the cache — telling the rider their offline
+ * coverage was empty when it was not. Worse than a cosmetic bug: they would
+ * reasonably conclude the feature does not work.
+ */
+async function discoverCachedStops() {
+    offlineState.cached.clear();
+    if (!('caches' in window)) return offlineState.cached;
+
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        for (const request of await cache.keys()) {
+            const url = new URL(request.url);
+            if (!url.pathname.endsWith('/journey/offline-pack')) continue;
+            // The pack's waypoint is in the request's own query string,
+            // which is also the key the service worker matches on.
+            const waypointId = url.searchParams.get('waypoint_id');
+            if (waypointId) {
+                offlineState.cached.add(waypointId);
+            }
+        }
+    } catch (err) {
+        console.warn('Could not enumerate cached story packs:', err);
+    }
+    return offlineState.cached;
 }
 
 function initOffline() {
@@ -123,7 +172,8 @@ function initOffline() {
     if (!button) return;
 
     registerOfflineWorker();
-    renderOfflineStatus();
+    setOfflineStatus('Checking what is cached…');
+    discoverCachedStops().then(renderOfflineStatus);
 
     button.addEventListener('click', async () => {
         const waypointId = document.getElementById('memory-waypoint')?.value
