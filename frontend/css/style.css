@@ -969,64 +969,6 @@ footer {
 }
 
 
-/* ---------------------------------------------------------------------
-   Station Time Machine — schematic era reconstruction.
-
-   Replaces the old past/present image comparison, which rendered the same
-   placeholder photograph in both frames.
-   --------------------------------------------------------------------- */
-
-#era-visual {
-    margin-top: 0.9rem;
-}
-
-.era-schematic {
-    width: 100%;
-    height: auto;
-    max-width: 32rem;
-    display: block;
-    background: var(--bg);
-    border: 1px solid var(--shadow);
-    border-radius: var(--radius);
-    padding: 0.4rem;
-}
-
-.era-change {
-    font-size: 1.1rem;
-    color: var(--text);
-    margin: 0.6rem 0 0.4rem;
-    line-height: 1.45;
-}
-
-.era-facts {
-    display: grid;
-    grid-template-columns: minmax(5rem, auto) 1fr;
-    gap: 0.2rem 0.8rem;
-    margin: 0;
-    font-size: 1rem;
-}
-
-.era-facts dt {
-    color: var(--text-light);
-    font-weight: 600;
-}
-
-.era-facts dd {
-    margin: 0;
-    font-weight: 600;
-}
-
-.era-note {
-    font-size: 1rem;
-    color: var(--text-light);
-    font-style: italic;
-    background: var(--bg);
-    border-left: 3px solid var(--accent);
-    padding: 0.6rem 0.8rem;
-    margin: 0.5rem 0 0;
-}
-
-
 .offline-reader {
     margin-top: 1rem;
     padding: 1rem;

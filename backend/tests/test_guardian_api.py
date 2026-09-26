@@ -211,7 +211,6 @@ def test_offline_pack_is_self_contained():
     assert pack["story"]["text"]
     assert pack["pois"]
     assert pack["stop_content"]["historical_narrative"]
-    assert pack["stop_content"]["era_years"] == ["1970", "1990", "2023"]
     assert pack["next_waypoint"]["waypoint_id"] == "worcester"
 
 

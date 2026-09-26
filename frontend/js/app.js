@@ -24,9 +24,6 @@ let consecutiveShareFailures = 0;
 // slow earlier response can't overwrite a newer position/progress reading.
 let latestPositionRequest = 0;
 
-// Current stop data for the Time Machine feature
-let currentStopData = null;
-
 const els = {
     btnExplorer: document.getElementById('btn-explorer'),
     btnCompanion: document.getElementById('btn-companion'),
@@ -55,17 +52,11 @@ const els = {
     languageSelect: document.getElementById('language-select'),
     stopPanel: document.getElementById('stop-panel'),
     closeStopPanel: document.getElementById('close-stop-panel'),
-    panelArchival: document.getElementById('stop-panel-archival'),
     panelStopName: document.getElementById('panel-stop-name'),
     panelNarrative: document.getElementById('panel-narrative'),
     panelHeritageList: document.getElementById('panel-heritage-list'),
     panelStallsList: document.getElementById('panel-stalls-list'),
     btnContinueJourney: document.getElementById('btn-continue-journey'),
-    eraSlider: document.getElementById('era-slider'),
-    eraOptions: document.getElementById('era-options'),
-    eraVisual: document.getElementById('era-visual'),
-    selectedYearLabel: document.getElementById('selected-year'),
-    eraDescription: document.getElementById('era-description'),
     guideChat: document.getElementById('guide-chat'),
     chatMessages: document.getElementById('chat-messages'),
     guideForm: document.getElementById('guide-form'),
@@ -245,7 +236,6 @@ document.getElementById('btn-track').addEventListener('click', () => {
     els.btnContinueJourney.addEventListener('click', resumeExplorerJourney);
     els.guideForm.addEventListener('submit', handleGuideSubmit);
     els.languageSelect.addEventListener('change', (e) => { currentLanguage = e.target.value; });
-    els.eraSlider.addEventListener('input', handleEraChange);
 
     document.addEventListener('keydown', handleKeydown);
 
@@ -551,16 +541,10 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
     els.panelNarrative.textContent = 'Loading stop insights...';
     els.panelHeritageList.innerHTML = '';
     els.panelStallsList.innerHTML = '';
-    els.eraVisual.innerHTML = '';
     els.btnContinueJourney.classList.toggle('hidden', !resumable);
-    // Reset the Time Machine to its earliest era when opening a new stop.
-    els.eraSlider.value = '0';
-    els.selectedYearLabel.textContent = '1970';
 
     try {
         const data = await fetchStopDetails(stopId);
-        // Store current stop data for Time Machine feature
-        currentStopData = data;
         els.panelStopName.textContent = data.stop_name || stopName || 'Stop Insights';
         els.panelNarrative.textContent =
             data.historical_narrative || 'No narrative recorded for this stop yet.';
@@ -571,65 +555,13 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
         renderFoundItems(els.panelStallsList, data.local_stalls, 'stall', (stall) =>
             `${stall.name} [${stall.category}]: ${stall.description}`
         );
-
-        buildEraSlider(data, stopName);
     } catch (err) {
         console.error('Failed to fetch stop details:', err);
         els.panelNarrative.textContent = 'Could not load stop insights. Is the backend running?';
-        currentStopData = null;
     }
 
     els.stopPanel.classList.remove('hidden');
     els.closeStopPanel.focus();
-}
-
-/**
- * Point the era slider at the years this stop actually has data for.
- *
- * The slider used to be a raw 1970-2023 range with step=20, which put
- * reachable positions on 2010 — a year with no content behind it, so the
- * panel fell through to a generic "Simulating station environment" line. It
- * is now an index into the real era list.
- */
-function buildEraSlider(data, stopName) {
-    const years = data.era_years || [];
-    const details = data.era_details || {};
-
-    els.eraSlider.max = String(Math.max(0, years.length - 1));
-    els.eraOptions.innerHTML = '';
-    years.forEach((year, index) => {
-        const option = document.createElement('option');
-        option.value = String(index);
-        option.label = year;
-        els.eraOptions.appendChild(option);
-    });
-
-    if (years.length === 0) {
-        els.eraDescription.textContent =
-            'No era records exist for this stop yet. Heritage content lands with partner outreach.';
-        els.eraVisual.innerHTML = '';
-        return;
-    }
-
-    const first = years[0];
-    els.eraSlider.value = '0';
-    els.selectedYearLabel.textContent = first;
-    els.eraDescription.textContent = details[first]?.narrative || data.eras?.[first] || '';
-    renderEraStation(els.eraVisual, data.stop_name || stopName || 'This stop', details[first]);
-}
-
-function handleEraChange(e) {
-    const years = currentStopData?.era_years || [];
-    const index = Number(e.target.value);
-    const year = years[index];
-    if (!year) {
-        return;
-    }
-
-    els.selectedYearLabel.textContent = year;
-    const era = currentStopData.era_details?.[year];
-    els.eraDescription.textContent = era?.narrative || currentStopData.eras?.[year] || '';
-    renderEraStation(els.eraVisual, currentStopData.stop_name || 'This stop', era);
 }
 
 function renderFoundItems(listEl, items, emptyLabel, formatItem) {
