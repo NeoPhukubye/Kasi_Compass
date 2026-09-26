@@ -54,14 +54,14 @@ body {
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
-    /* Elderly-friendly: large readable text, generous spacing */
-    font-size: 20px;
+    /* Elderly-friendly: readable text, generous spacing */
+    font-size: 18px;
     line-height: 1.6;
 }
 
-/* Large-print toggle for even bigger text */
+/* Large-print mode for even bigger text */
 body.large-print {
-    font-size: 26px;
+    font-size: 22px;
     line-height: 1.7;
 }
 
@@ -1026,6 +1026,25 @@ footer {
     margin: 0.5rem 0 0;
 }
 
+
+.offline-reader {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+    border-left: 4px solid var(--accent);
+}
+
+.offline-reader h4 {
+    color: var(--primary);
+    margin: 0 0 0.5rem;
+    font-size: 1.3rem;
+}
+
+.offline-reader .panel-note {
+    margin-top: 0.5rem;
+    font-size: 1rem;
+}
 
 /* ---------------------------------------------------------------------
    Elderly-friendly large-print toggle and responsive layout.

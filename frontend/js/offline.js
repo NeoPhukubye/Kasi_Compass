@@ -167,6 +167,73 @@ async function discoverCachedStops() {
     return offlineState.cached;
 }
 
+/**
+ * Load and display a cached pack's story so a rider in a dead zone can
+ * actually read what they pre-cached. The list above is the index; this
+ * is the content.
+ */
+async function readCachedPack(waypointId, language = 'en') {
+    const query = new URLSearchParams({ waypoint_id: waypointId, language });
+    const cacheKey = `${window.KASI_API_BASE}/journey/offline-pack?${query.toString()}`;
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(cacheKey);
+        if (!cached) {
+            setOfflineStatus('That stop is not cached yet.', 'warn');
+            return;
+        }
+        const pack = await cached.json();
+        const reader = document.getElementById('offline-reader');
+        const readerTitle = document.getElementById('offline-reader-title');
+        const readerText = document.getElementById('offline-reader-text');
+        const readerSource = document.getElementById('offline-reader-source');
+
+        if (reader && readerTitle && readerText && readerSource) {
+            readerTitle.textContent = pack.waypoint_name;
+            readerText.textContent = pack.story?.text || 'No story recorded for this stop yet.';
+            readerSource.textContent = `Source: ${pack.story_source || 'unknown'} · ${pack.story?.kind || 'n/a'}`;
+            reader.classList.remove('hidden');
+        }
+    } catch (err) {
+        console.error('Could not read cached pack:', err);
+        setOfflineStatus('Could not read that cached story.', 'warn');
+    }
+}
+
+function renderOfflineStatus() {
+    const list = document.getElementById('offline-cached');
+    if (!list) return;
+    list.innerHTML = '';
+    for (const waypointId of offlineState.cached) {
+        const item = document.createElement('li');
+        item.textContent = waypointId.replace(/_/g, ' ');
+        item.style.cursor = 'pointer';
+        item.title = 'Tap to read this cached story';
+        item.addEventListener('click', () => {
+            const lang = document.getElementById('language-select')?.value || 'en';
+            readCachedPack(waypointId, lang);
+        });
+        list.appendChild(item);
+    }
+
+    if (offlineState.cached.size === 0) {
+        setOfflineStatus(
+            offlineState.online
+                ? 'Nothing cached yet. Pick a stop above, then use the button to store it and the next one.'
+                : 'Offline with nothing cached — stories will not load until you reconnect.',
+            offlineState.online ? 'info' : 'warn'
+        );
+        return;
+    }
+
+    setOfflineStatus(
+        offlineState.online
+            ? `Ready for dead zones: ${offlineState.cached.size} stop(s) cached. Tap a stop to read it.`
+            : `Offline. ${offlineState.cached.size} cached stop(s) available. Tap a stop to read it.`,
+        offlineState.online ? 'ok' : 'warn'
+    );
+}
+
 function initOffline() {
     const button = document.getElementById('btn-cache-next');
     if (!button) return;
@@ -180,7 +247,7 @@ function initOffline() {
             || document.getElementById('guardian-start')?.value
             || 'johannesburg_park';
         button.disabled = true;
-        await cacheUpcomingStops(waypointId, document.getElementById('language-select').value);
+        await cacheUpcomingStops(waypointId, document.getElementById('language-select')?.value || 'en');
         button.disabled = false;
     });
 
