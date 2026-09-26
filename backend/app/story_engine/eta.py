@@ -335,6 +335,12 @@ def compute_eta(journey_id: str, now: float | None = None) -> EtaResult:
     Returns status "no_data" (rather than raising) when a journey has never
     reported a position — a family link opened for a train that hasn't
     started moving should say "waiting for the first report", not 404.
+
+    When the latest corridor report is older than STALE_TELEMETRY_SECONDS,
+    the position is projected forward along the corridor at the last
+    observed speed, so a family page keeps seeing the train move even
+    during a gap between reports. The projection is labelled explicitly
+    via `speed_source` — it is never presented as a fresh measurement.
     """
     now = now if now is not None else time.time()
     telemetry = spatial.spatial_store.recent_telemetry(journey_id, limit=SPEED_SAMPLE_POINTS)
@@ -347,11 +353,37 @@ def compute_eta(journey_id: str, now: float | None = None) -> EtaResult:
 
     last_report_seconds_ago = max(0.0, now - latest.recorded_at)
     stale = last_report_seconds_ago > STALE_TELEMETRY_SECONDS
+
+    # Project forward through the gap so the family view keeps moving.
+    # A train that reported 3 hours ago but was doing 60km/h has, in the
+    # meantime, covered another 180km — and pretending it is still at the
+    # last reported dot is the lie this whole module exists to avoid.
+    projected_distance = position.distance_along_km
+    if speed_kmh > 0.0 and last_report_seconds_ago > 0:
+        projected_distance = min(
+            position.total_km,
+            position.distance_along_km + (speed_kmh * last_report_seconds_ago / 3600.0),
+        )
+
+    projected_position = CorridorPosition(
+        latitude=latest.latitude,
+        longitude=latest.longitude,
+        progress_fraction=min(1.0, projected_distance / position.total_km) if position.total_km else 0.0,
+        distance_along_km=projected_distance,
+        total_km=position.total_km,
+        remaining_km=max(0.0, position.total_km - projected_distance),
+        nearest_waypoint_id=position.nearest_waypoint_id,
+        nearest_waypoint_name=position.nearest_waypoint_name,
+        province=position.province,
+        distance_to_corridor_m=position.distance_to_corridor_m,
+        driver=position.driver,
+    )
+
     if stale:
         status = "signal_lost"
     elif speed_source == "stationary":
         status = "stopped"
-    elif position.progress_fraction >= 0.999:
+    elif projected_position.progress_fraction >= 0.999:
         status = "arrived"
     else:
         status = "on_time" if speed_kmh >= SCHEDULED_SPEED_KMH * 0.95 else "delayed"
@@ -363,15 +395,15 @@ def compute_eta(journey_id: str, now: float | None = None) -> EtaResult:
         eta_next_epoch: float | None = None
         eta_arrival_epoch: float | None = None
     else:
-        eta_arrival_epoch = now + (position.remaining_km / speed_kmh) * 3600.0
-        upcoming = _next_stop_after(position.distance_along_km)
+        eta_arrival_epoch = now + (projected_position.remaining_km / speed_kmh) * 3600.0
+        upcoming = _next_stop_after(projected_position.distance_along_km)
         if upcoming is None:
             eta_next_epoch = eta_arrival_epoch
         else:
             _, remaining_km, _ = upcoming
             eta_next_epoch = now + (remaining_km / speed_kmh) * 3600.0
 
-    upcoming = _next_stop_after(position.distance_along_km)
+    upcoming = _next_stop_after(projected_position.distance_along_km)
     if upcoming is None:
         next_station_name: str | None = None
         distance_to_next = 0.0
@@ -380,9 +412,9 @@ def compute_eta(journey_id: str, now: float | None = None) -> EtaResult:
 
     # Delay is measured against the timetable, not against a wish: how long
     # *should* the remaining distance take, minus how long it is taking.
-    scheduled_hours = position.remaining_km / SCHEDULED_SPEED_KMH
+    scheduled_hours = projected_position.remaining_km / SCHEDULED_SPEED_KMH
     if speed_kmh > 0.0 and not stale:
-        actual_hours = position.remaining_km / speed_kmh
+        actual_hours = projected_position.remaining_km / speed_kmh
         delay_hours = max(0.0, actual_hours - scheduled_hours)
     else:
         delay_hours = 0.0
@@ -401,7 +433,7 @@ def compute_eta(journey_id: str, now: float | None = None) -> EtaResult:
     return EtaResult(
         journey_id=journey_id,
         status=status,
-        position=position,
+        position=projected_position,
         observed_speed_kmh=speed_kmh,
         speed_source=speed_source,
         eta_next_station_epoch=eta_next_epoch,
@@ -410,12 +442,12 @@ def compute_eta(journey_id: str, now: float | None = None) -> EtaResult:
         eta_arrival_name=PRETORIA_TO_CAPE_TOWN[-1].name,
         delay_hours=delay_hours,
         delay_display=delay_display,
-        province=position.province,
-        next_province=_next_province_after(position.province),
+        province=projected_position.province,
+        next_province=_next_province_after(projected_position.province),
         distance_to_next_station_km=distance_to_next,
         last_report_seconds_ago=last_report_seconds_ago,
         last_report_source=latest.source,
-        milestones=build_milestones(position),
+        milestones=build_milestones(projected_position),
     )
 
 
