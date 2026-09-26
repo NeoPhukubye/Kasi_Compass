@@ -6,6 +6,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
     <title>Kasi Compass — Train Journey Mapper</title>
     <script src="js/config.js"></script>
+    <script src="js/prasa.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.19.0/dist/maplibre-gl.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -236,6 +237,42 @@
                 <p id="memory-empty" class="panel-note">No memories here yet. Be the first.</p>
                 <ul id="memory-list" class="memory-list"></ul>
             </section>
+
+            <section id="prasa-panel" role="region" aria-labelledby="prasa-title" class="hidden">
+                <h3 id="prasa-title">PRASA timetable &amp; live status</h3>
+                <p class="panel-note">
+                    Passenger Rail Agency of South Africa schedule and live train
+                    position. When PRASA publishes a developer API, the endpoint
+                    below is swapped in without changing anything else.
+                </p>
+                <div class="prasa-controls">
+                    <label for="prasa-route">Route</label>
+                    <select id="prasa-route">
+                        <option value="pretoria_cape_town">Pretoria → Cape Town</option>
+                        <option value="johannesburg_durban">Johannesburg → Durban</option>
+                        <option value="cape_town_durban">Cape Town → Durban</option>
+                    </select>
+                    <button id="btn-prasa-refresh">Refresh</button>
+                </div>
+                <p id="prasa-status" class="prasa-status" aria-live="polite"></p>
+                <div id="prasa-live" class="prasa-live">
+                    <h4 id="prasa-live-train"></h4>
+                    <p id="prasa-live-position" class="panel-narrative"></p>
+                    <p id="prasa-live-status" class="panel-note"></p>
+                </div>
+                <table id="prasa-timetable" class="prasa-timetable">
+                    <thead>
+                        <tr>
+                            <th>Stop</th>
+                            <th>Arrives</th>
+                            <th>Departs</th>
+                            <th>Platform</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prasa-timetable-body"></tbody>
+                </table>
+            </section>
+
         </main>
 
         <footer role="contentinfo">
