@@ -70,7 +70,102 @@ const els = {
     guideForm: document.getElementById('guide-form'),
     guideInput: document.getElementById('guide-input'),
     guideStatus: document.getElementById('guide-status'),
+    // PRASA timetable and live status panel
+    prasaRoute: document.getElementById('prasa-route'),
+    prasaRefresh: document.getElementById('btn-prasa-refresh'),
+    prasaStatus: document.getElementById('prasa-status'),
+    prasaLive: document.getElementById('prasa-live'),
+    prasaLiveTrain: document.getElementById('prasa-live-train'),
+    prasaLivePosition: document.getElementById('prasa-live-position'),
+    prasaLiveStatus: document.getElementById('prasa-live-status'),
+    prasaTimetableBody: document.getElementById('prasa-timetable-body'),
 };
+
+// ---------------------------------------------------------------------
+// PRASA timetable and live status.
+//
+// The Passenger Rail Agency of South Africa does not yet publish a
+// developer API, so this panel runs against the mock fallback in
+// js/prasa.js. When PRASA's API lands, set window.PRASA_API_BASE and
+// the real data flows in without any code change here.
+// ---------------------------------------------------------------------
+
+function formatPrasaTime(iso) {
+    if (!iso) return '—';
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleString(undefined, {
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function renderPrasaTimetable(stops) {
+    const body = els.prasaTimetableBody;
+    body.innerHTML = '';
+    for (const stop of stops || []) {
+        const row = document.createElement('tr');
+        const name = document.createElement('td');
+        name.textContent = stop.station_name;
+        const arrives = document.createElement('td');
+        arrives.textContent = formatPrasaTime(stop.arrives);
+        const departs = document.createElement('td');
+        departs.textContent = formatPrasaTime(stop.departs);
+        const platform = document.createElement('td');
+        platform.textContent = stop.platform || '—';
+        row.append(name, arrives, departs, platform);
+        body.appendChild(row);
+    }
+}
+
+function renderPrasaLive(live) {
+    els.prasaLiveTrain.textContent = `${live.service_name} · train ${live.train_number}`;
+    const position = live.current_station
+        ? `At ${live.current_station.replace(/_/g, ' ')}`
+        : 'Position unknown';
+    const next = live.next_station
+        ? `, next stop ${live.next_station.replace(/_/g, ' ')}`
+        : '';
+    els.prasaLivePosition.textContent = position + next;
+    const statusText = live.status === 'on_time'
+        ? 'Running on time'
+        : `${live.delay_minutes} minute(s) late`;
+    const source = live.source === 'mock'
+        ? ' (demo data — PRASA API not yet published)'
+        : '';
+    els.prasaLiveStatus.textContent = statusText + source;
+}
+
+async function refreshPrasa() {
+    const routeId = els.prasaRoute.value;
+    els.prasaRefresh.disabled = true;
+    els.prasaStatus.textContent = 'Loading PRASA timetable and live status…';
+
+    try {
+        const [timetable, live] = await Promise.all([
+            fetchPrasaTimetable(routeId),
+            fetchPrasaLiveStatus(routeId),
+        ]);
+        renderPrasaTimetable(timetable.stops);
+        renderPrasaLive(live);
+        els.prasaStatus.textContent = timetable.source === 'mock'
+            ? 'Showing demo data — PRASA has not yet published a developer API.'
+            : `Updated ${new Date().toLocaleTimeString()}.`;
+        els.prasaLive.classList.remove('hidden');
+    } catch (err) {
+        console.error('PRASA refresh failed:', err);
+        els.prasaStatus.textContent = 'Could not load PRASA timetable.';
+    } finally {
+        els.prasaRefresh.disabled = false;
+    }
+}
+
+function initPrasa() {
+    if (!els.prasaRefresh) return;
+    els.prasaRefresh.addEventListener('click', refreshPrasa);
+    refreshPrasa();
+}
 
 function beginJourney() {
     document.getElementById('hero').style.display = 'none';
@@ -138,6 +233,14 @@ document.getElementById('btn-track').addEventListener('click', () => {
         initOffline();
     } catch (err) {
         console.error('Offline packs failed to initialise:', err);
+    }
+
+    // PRASA timetable and live status. Additive — a failure here must not
+    // take the journey map down with it.
+    try {
+        initPrasa();
+    } catch (err) {
+        console.error('PRASA panel failed to initialise:', err);
     }
 }
 
