@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
     <title>Kasi Compass — Journey Tracking</title>
     <script src="js/config.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.19.0/dist/maplibre-gl.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <div class="large-print-toggle">
+        <button id="btn-large-print" aria-label="Toggle large print mode">Aa</button>
+    </div>
     <div id="app">
         <header role="banner">
             <h1>Kasi Compass</h1>
@@ -19,7 +21,6 @@
         <main id="main-content" role="main">
             <section id="track-view" role="region" aria-labelledby="track-headline">
                 <p id="track-label" class="hero-label"></p>
-                <div id="status-dot" class="status-dot"></div>
                 <h2 id="track-headline">Loading…</h2>
                 <p id="track-status" class="track-status" aria-live="polite"></p>
             </section>
@@ -52,5 +53,18 @@
 
     <script src="js/api.js"></script>
     <script src="js/track.js"></script>
+    <script>
+        // Large-print toggle for the family tracking page too
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('btn-large-print');
+            let largePrintMode = false;
+            btn.addEventListener('click', () => {
+                largePrintMode = !largePrintMode;
+                document.body.classList.toggle('large-print', largePrintMode);
+                btn.textContent = largePrintMode ? 'Aa-' : 'Aa+';
+                btn.setAttribute('aria-pressed', String(largePrintMode));
+            });
+        });
+    </script>
 </body>
 </html>
