@@ -119,19 +119,65 @@ class Journey:
 
 class JourneyRegistry:
     """
-    In-memory registry of journeys and their guardian links.
+    Registry of journeys and their guardian links, backed by the spatial
+    store.
 
-    Journey *positions* are persisted in spatial.py (SQLite or PostGIS) and
-    survive a restart. The registry itself is process-local: a token minted
-    before a redeploy stops resolving until it is re-issued. That is a known
-    boundary rather than a hidden one, and the alternative — putting
-    revocable capability tokens in a database table — is the obvious next
-    step once there is a real operator integration behind this.
+    Everything is written through to the database on mutation, and hydrated
+    from it on first use. That is not belt-and-braces: a guardian token is a
+    capability somebody has already sent in a WhatsApp message, so losing it
+    to a redeploy breaks the promise the product exists to keep — and the
+    person who notices is the family, not the operator.
+
+    The in-memory maps stay as a read cache, because the hot path (a family
+    page polling every ten seconds) should not hit the database for a token
+    lookup it has already resolved this process.
     """
 
     def __init__(self) -> None:
         self._journeys: dict[str, Journey] = {}
         self._links: dict[str, GuardianLink] = {}
+        self._hydrated = False
+
+    def _hydrate(self) -> None:
+        """
+        Pull journeys and links out of the database once per process.
+
+        Guarded so concurrent first requests don't each do the work, and
+        tolerant of a store that hasn't been seeded yet — an empty registry
+        is a valid state, not an error.
+        """
+        if self._hydrated:
+            return
+        self._hydrated = True
+
+        for record in spatial.spatial_store.load_journeys():
+            if record["journey_id"] in self._journeys:
+                continue
+            journey = Journey(
+                journey_id=record["journey_id"],
+                corridor_id=record["corridor_id"],
+                origin_waypoint_id=record["origin_waypoint_id"],
+                destination_waypoint_id=record["destination_waypoint_id"],
+                created_at=record["created_at"],
+                ticket_id=record["ticket_id"],
+            )
+            self._journeys[journey.journey_id] = journey
+
+        for record in spatial.spatial_store.load_all_links():
+            if record["token"] in self._links:
+                continue
+            link = GuardianLink(
+                token=record["token"],
+                journey_id=record["journey_id"],
+                created_at=record["created_at"],
+                revoked=record["revoked"],
+                label=record["label"],
+                display_name=record["display_name"],
+            )
+            self._links[link.token] = link
+            journey = self._journeys.get(link.journey_id)
+            if journey is not None and not link.revoked:
+                journey.guardian_links[link.token] = link
 
     # ------------------------------------------------------------------
     # Journeys
@@ -146,6 +192,7 @@ class JourneyRegistry:
         ticket_id: str | None = None,
         now: float | None = None,
     ) -> Journey:
+        self._hydrate()
         if not is_valid_journey_id(journey_id):
             raise ValueError("journey_id must be UUID-shaped")
         now = now if now is not None else time.time()
@@ -158,12 +205,15 @@ class JourneyRegistry:
             ticket_id=ticket_id,
         )
         self._journeys[journey_id] = journey
+        spatial.spatial_store.save_journey(journey.as_dict())
         return journey
 
     def get_journey(self, journey_id: str) -> Journey | None:
+        self._hydrate()
         return self._journeys.get(journey_id)
 
     def journeys(self) -> list[Journey]:
+        self._hydrate()
         return list(self._journeys.values())
 
     # ------------------------------------------------------------------
@@ -188,6 +238,7 @@ class JourneyRegistry:
         if journey is None:
             raise ValueError(f"unknown journey_id: {journey_id!r}")
 
+        self._hydrate()
         now = now if now is not None else time.time()
         token = generate_guardian_token()
         while token in self._links:  # pragma: no cover - 2^192 space
@@ -202,25 +253,52 @@ class JourneyRegistry:
         )
         self._links[token] = link
         journey.guardian_links[token] = link
+        # Written through before it is handed back, so a link that has been
+        # sent to someone is never one that only exists in this process.
+        spatial.spatial_store.save_link(link.as_dict())
         return link
 
     def resolve_link(self, token: str) -> GuardianLink | None:
         """Look up a token. Revoked links resolve to None, immediately."""
+        self._hydrate()
         if not GUARDIAN_TOKEN_PATTERN.match(token):
             return None
         link = self._links.get(token)
-        if link is None or link.revoked:
+        if link is not None:
+            return None if link.revoked else link
+        # A token this process has never seen may still be a live link minted
+        # before a restart. Check the database before calling it unknown —
+        # failing closed here would silently break a family link.
+        record = spatial.spatial_store.load_link(token)
+        if record is None or record["revoked"]:
             return None
+        link = GuardianLink(
+            token=record["token"],
+            journey_id=record["journey_id"],
+            created_at=record["created_at"],
+            revoked=False,
+            label=record["label"],
+            display_name=record["display_name"],
+        )
+        self._links[link.token] = link
+        journey = self._journeys.get(link.journey_id)
+        if journey is not None:
+            journey.guardian_links[link.token] = link
         return link
 
     def revoke_link(self, token: str) -> bool:
         """
         Revoke a link now. The family member's next poll gets a 404, rather
         than continuing to receive a position until some TTL lapses.
+
+        The revocation is written to the database, so a restart cannot
+        resurrect a link the rider has already cancelled.
         """
+        self._hydrate()
         link = self._links.get(token)
+        existed_in_db = spatial.spatial_store.revoke_link(token)
         if link is None:
-            return False
+            return existed_in_db
         link.revoked = True
         journey = self._journeys.get(link.journey_id)
         if journey is not None:
@@ -228,6 +306,7 @@ class JourneyRegistry:
         return True
 
     def links_for(self, journey_id: str) -> list[GuardianLink]:
+        self._hydrate()
         journey = self._journeys.get(journey_id)
         if journey is None:
             return []
@@ -255,8 +334,9 @@ class JourneyRegistry:
         point, because a reporter almost always wants both.
         """
         if journey_id not in self._journeys:
+            self._hydrate()
+        if journey_id not in self._journeys:
             self.create_journey(journey_id)
-
         point = spatial.spatial_store.record_telemetry(
             journey_id=journey_id,
             lat=lat,
