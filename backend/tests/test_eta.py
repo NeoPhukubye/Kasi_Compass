@@ -90,9 +90,19 @@ def test_simulated_run_lands_on_the_corridor_and_reports_observed_speed(store):
 def test_simulated_run_moves_south_along_the_corridor(store):
     simulate_corridor_run("sim-2", start_waypoint_id="pretoria", steps=4, speed_kmh=62)
     points = store.recent_telemetry("sim-2")
-    assert len(points) == 4
+    # One report of the origin station, then one per step of movement.
+    assert len(points) == 5
     latitudes = [p.latitude for p in points]
     assert latitudes == sorted(latitudes, reverse=True)
+
+
+def test_simulated_run_timestamps_strictly_increase(store):
+    # A tie between two samples makes "which is the latest position?" depend
+    # on row order rather than on the data.
+    simulate_corridor_run("sim-ts", start_waypoint_id="pretoria", steps=6, step_minutes=30)
+    stamps = [p.recorded_at for p in store.recent_telemetry("sim-ts")]
+    assert stamps == sorted(stamps)
+    assert len(set(stamps)) == len(stamps)
 
 
 def test_a_fresh_run_is_not_reported_as_stale(store):
