@@ -257,6 +257,12 @@ document.getElementById('btn-track').addEventListener('click', () => {
         console.error('Offline packs failed to initialise:', err);
     }
 
+    try {
+        initZulzi();
+    } catch (err) {
+        console.error('Zulzi panel failed to initialise:', err);
+    }
+
     // PRASA timetable and live status. Additive — a failure here must not
     // take the journey map down with it.
     try {
@@ -293,6 +299,7 @@ function switchMode(mode) {
     document.getElementById('journey-progress').classList.remove('hidden');
     document.getElementById('guardian').classList.remove('hidden');
     document.getElementById('passport').classList.remove('hidden');
+    document.getElementById('zulzi-panel').classList.remove('hidden');
 
     if (mode === 'explorer') {
         els.btnExplorer.classList.add('active');
