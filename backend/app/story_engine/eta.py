@@ -72,6 +72,11 @@ SPEED_EWMA_ALPHA = 0.35
 # and the family view says so rather than showing a confidently stale dot.
 STALE_TELEMETRY_SECONDS = 900.0
 
+# Upper bound on samples one simulated corridor run may generate. High enough
+# to resolve every station on the corridor, low enough that a request cannot
+# write an unbounded number of rows.
+MAX_SIMULATION_STEPS = 60
+
 # Tolerance when deciding whether a milestone has been reached, in km.
 #
 # `distance_along_km` comes from projecting the position onto a segment,
@@ -439,16 +444,38 @@ def simulate_corridor_run(
         (i for i, w in enumerate(PRETORIA_TO_CAPE_TOWN) if w.id == start_waypoint_id),
         0,
     )
-    total_steps = max(1, min(steps, len(PRETORIA_TO_CAPE_TOWN) - 1 - start_index))
+    # Clamped to a sample budget, not to the number of stations. A real
+    # corridor feed reports every few minutes, so a 1,365km journey is
+    # covered by dozens of samples over the same eight stations — capping at
+    # `len(stations) - 1` silently limited a demo to one sample per station
+    # gap, which meant a train could pass a station without ever coming
+    # within stamping distance of it.
+    total_steps = max(1, min(steps, MAX_SIMULATION_STEPS))
     distance_per_step_km = speed_kmh * (step_minutes / 60.0)
 
     walked_km = 0.0
     for step in range(total_steps):
-        target_km = walked_km + distance_per_step_km
         # The final sample is stamped "now" so a freshly simulated run does
         # not immediately read as a stale feed — a run that reports its own
         # position as 30 minutes old is indistinguishable from a dead one.
         sample_at = now - (total_steps - 1 - step) * step_minutes * 60.0
+
+        if step == 0:
+            # Report the origin station itself before moving, timestamped one
+            # interval *earlier* than the first movement sample. Sharing a
+            # timestamp with it made the two rows order arbitrarily, so which
+            # one came back as "latest" was a coin toss.
+            origin = PRETORIA_TO_CAPE_TOWN[start_index]
+            spatial.spatial_store.record_telemetry(
+                journey_id=journey_id,
+                lat=origin.latitude,
+                lon=origin.longitude,
+                speed_mps=speed_kmh / 3.6,
+                source="corridor-simulation",
+                recorded_at=sample_at - step_minutes * 60.0,
+            )
+
+        target_km = walked_km + distance_per_step_km
         segment_walked = 0.0
         for index in range(start_index, len(PRETORIA_TO_CAPE_TOWN) - 1):
             a = PRETORIA_TO_CAPE_TOWN[index]
