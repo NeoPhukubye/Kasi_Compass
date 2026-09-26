@@ -52,17 +52,14 @@ const els = {
     stopPanel: document.getElementById('stop-panel'),
     closeStopPanel: document.getElementById('close-stop-panel'),
     panelArchival: document.getElementById('stop-panel-archival'),
-    stopImagery: document.getElementById('stop-imagery'),
-    stopImgPast: document.getElementById('stop-img-past'),
-    stopImgPresent: document.getElementById('stop-img-present'),
-    stopImgPastCaption: document.getElementById('stop-img-past-caption'),
-    stopImgPresentCaption: document.getElementById('stop-img-present-caption'),
     panelStopName: document.getElementById('panel-stop-name'),
     panelNarrative: document.getElementById('panel-narrative'),
     panelHeritageList: document.getElementById('panel-heritage-list'),
     panelStallsList: document.getElementById('panel-stalls-list'),
     btnContinueJourney: document.getElementById('btn-continue-journey'),
     eraSlider: document.getElementById('era-slider'),
+    eraOptions: document.getElementById('era-options'),
+    eraVisual: document.getElementById('era-visual'),
     selectedYearLabel: document.getElementById('selected-year'),
     eraDescription: document.getElementById('era-description'),
     guideChat: document.getElementById('guide-chat'),
@@ -108,13 +105,18 @@ function init() {
     window.onJourneyComplete = onJourneyComplete;
     window.onWaypointClick = onWaypointClick;
 
-    // Journey Guardian panel + Memory Vault. Both are additive to the
-    // journey experience above, so a failure here must not take the map
-    // down with it.
+    // Journey Guardian panel, Memory Vault, and offline story packs. All
+    // additive to the journey experience above, so a failure here must not
+    // take the map down with it.
     try {
         initGuardian();
     } catch (err) {
         console.error('Guardian panel failed to initialise:', err);
+    }
+    try {
+        initOffline();
+    } catch (err) {
+        console.error('Offline packs failed to initialise:', err);
     }
 }
 
@@ -390,11 +392,10 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
     els.panelNarrative.textContent = 'Loading stop insights...';
     els.panelHeritageList.innerHTML = '';
     els.panelStallsList.innerHTML = '';
-    els.stopImagery.classList.add('hidden');
-    els.panelArchival.classList.remove('hidden');
+    els.eraVisual.innerHTML = '';
     els.btnContinueJourney.classList.toggle('hidden', !resumable);
-    // Reset era slider to 1970 when opening a new stop
-    els.eraSlider.value = '1970';
+    // Reset the Time Machine to its earliest era when opening a new stop.
+    els.eraSlider.value = '0';
     els.selectedYearLabel.textContent = '1970';
 
     try {
@@ -412,11 +413,7 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
             `${stall.name} [${stall.category}]: ${stall.description}`
         );
 
-        renderStopImagery(data, stopName);
-        // Set initial era description
-        if (data.eras && data.eras['1970']) {
-            els.eraDescription.textContent = data.eras['1970'];
-        }
+        buildEraSlider(data, stopName);
     } catch (err) {
         console.error('Failed to fetch stop details:', err);
         els.panelNarrative.textContent = 'Could not load stop insights. Is the backend running?';
@@ -427,30 +424,53 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
     els.closeStopPanel.focus();
 }
 
-function handleEraChange(e) {
-    const year = e.target.value;
-    els.selectedYearLabel.textContent = year;
-    
-    if (currentStopData && currentStopData.eras && currentStopData.eras[year]) {
-        els.eraDescription.textContent = currentStopData.eras[year];
-    } else {
-        els.eraDescription.textContent = `Simulating station environment and surrounding infrastructure during the ${year} era.`;
+/**
+ * Point the era slider at the years this stop actually has data for.
+ *
+ * The slider used to be a raw 1970-2023 range with step=20, which put
+ * reachable positions on 2010 — a year with no content behind it, so the
+ * panel fell through to a generic "Simulating station environment" line. It
+ * is now an index into the real era list.
+ */
+function buildEraSlider(data, stopName) {
+    const years = data.era_years || [];
+    const details = data.era_details || {};
+
+    els.eraSlider.max = String(Math.max(0, years.length - 1));
+    els.eraOptions.innerHTML = '';
+    years.forEach((year, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.label = year;
+        els.eraOptions.appendChild(option);
+    });
+
+    if (years.length === 0) {
+        els.eraDescription.textContent =
+            'No era records exist for this stop yet. Heritage content lands with partner outreach.';
+        els.eraVisual.innerHTML = '';
+        return;
     }
+
+    const first = years[0];
+    els.eraSlider.value = '0';
+    els.selectedYearLabel.textContent = first;
+    els.eraDescription.textContent = details[first]?.narrative || data.eras?.[first] || '';
+    renderEraStation(els.eraVisual, data.stop_name || stopName || 'This stop', details[first]);
 }
 
-function renderStopImagery(data, stopName) {
-    const hasRealImages = Boolean(data.image_past && data.image_present);
-    if (hasRealImages) {
-        els.stopImgPast.src = data.image_past;
-        els.stopImgPresent.src = data.image_present;
+function handleEraChange(e) {
+    const years = currentStopData?.era_years || [];
+    const index = Number(e.target.value);
+    const year = years[index];
+    if (!year) {
+        return;
     }
-    const stopLabel = stopName || data.stop_name || 'This stop';
-    els.stopImgPast.alt = data.image_past_alt || `${stopLabel} in the past era`;
-    els.stopImgPresent.alt = data.image_present_alt || `${stopLabel} today`;
-    els.stopImgPastCaption.textContent = data.image_past_caption || '';
-    els.stopImgPresentCaption.textContent = data.image_present_caption || '';
-    els.stopImagery.classList.remove('hidden');
-    els.panelArchival.classList.add('hidden');
+
+    els.selectedYearLabel.textContent = year;
+    const era = currentStopData.era_details?.[year];
+    els.eraDescription.textContent = era?.narrative || currentStopData.eras?.[year] || '';
+    renderEraStation(els.eraVisual, currentStopData.stop_name || 'This stop', era);
 }
 
 function renderFoundItems(listEl, items, emptyLabel, formatItem) {
