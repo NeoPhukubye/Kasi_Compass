@@ -1047,6 +1047,87 @@ footer {
 }
 
 /* ---------------------------------------------------------------------
+   PRASA timetable and live status panel.
+   --------------------------------------------------------------------- */
+
+#prasa-panel {
+    background: var(--white);
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 8px var(--shadow);
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+}
+
+.prasa-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.prasa-controls label {
+    font-weight: 700;
+    color: var(--text);
+    font-size: 1.1rem;
+}
+
+.prasa-controls select {
+    padding: 0.6rem 1rem;
+    border: 3px solid var(--primary);
+    border-radius: var(--radius);
+    font-size: 1.1rem;
+    cursor: pointer;
+    min-width: 200px;
+}
+
+.prasa-status {
+    font-size: 1.1rem;
+    color: var(--text-light);
+    min-height: 1.2em;
+    margin: 0.5rem 0;
+}
+
+.prasa-live {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+    border-left: 4px solid var(--accent);
+}
+
+.prasa-live h4 {
+    color: var(--primary);
+    margin: 0 0 0.5rem;
+    font-size: 1.3rem;
+}
+
+.prasa-timetable {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.prasa-timetable th,
+.prasa-timetable td {
+    padding: 0.7rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid var(--bg);
+}
+
+.prasa-timetable th {
+    background: var(--primary);
+    color: var(--white);
+    font-weight: 700;
+}
+
+.prasa-timetable tr:nth-child(even) td {
+    background: var(--bg);
+}
+
+/* ---------------------------------------------------------------------
    Elderly-friendly large-print toggle and responsive layout.
    --------------------------------------------------------------------- */
 
