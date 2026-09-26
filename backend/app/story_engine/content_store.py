@@ -610,8 +610,7 @@ STOP_COORDINATES.update(
 
 # Decade-by-decade evolution narratives for the Time Machine feature.
 # Each stop has eras: 1970, 1990, 2023 (present day).
-TIMELINE_EVOLUTION: dict[str, dict[str, str]] = {
-    "pretoria": {
+TIMELINE_EVOLUTION: dict[str, dict[str, str]] = {    "pretoria": {
         "1970": "Pretoria Station in the 1970s thrummed with steam-era locomotives and the clatter of goods trains feeding the capital's industrial heart. The iconic Herbert Baker building presided over platforms busy with migrant workers and civil servants, while jacarandas bloomed purple along the approach roads each spring.",
         "1990": "By the 1990s, diesel-electric traction dominated the Pretoria lines. The station forecourt saw a surge of informal traders selling vetkoek and newspapers to commuters navigating the transition era. The Capital Park workshops still echoed with the rhythm of heavy maintenance, though their workforce was shifting.",
         "2023": "Today, Pretoria Station blends its grand sandstone heritage with modern Gautrain connections and a vibrant vendor precinct. The jacarandas still rain purple petals onto platforms where tourists and daily commuters mingle, and the Union Buildings glow on the hill above a city in constant motion.",
@@ -670,18 +669,201 @@ _DEFAULT_STOP_CONTENT: dict = {
     "local_stalls": [],
 }
 
+# ---------------------------------------------------------------------
+# Station Time Machine — structural era data.
+#
+# Why this exists
+# ---------------
+# The Time Machine originally displayed the *same* placeholder photograph in
+# both the "Past Era" and "Present" frames, labelled as though it were
+# archival comparison imagery. That was not merely an unfinished feature — it
+# was a false claim inside a product whose entire argument is that it never
+# shows a rider something it cannot substantiate. A commuter being told
+# "this is what the station looked like then" deserves better than a stock
+# image with a caption.
+#
+# So the Time Machine now renders what it can actually support: a schematic
+# reconstruction of the station's physical layout in each era, drawn from
+# the corridor's documented history — how many platforms and running lines
+# the stop had, what hauled its trains, whether the line was electrified, and
+# how it was signalled. These are structural facts about infrastructure, not
+# photographs, and they change in a way that is genuinely different per era.
+#
+# Honest scoping: `platforms` and `tracks` are a schematic scale for the
+# station's class (a passing loop has two running lines; a junction like De
+# Aar has a yard), not a surveyed platform count. `reconstruction: True` is
+# carried through to the client so the UI can label the panel a schematic
+# rather than passing it off as a photograph. Genuine archival photography is
+# still pending heritage-partner outreach, and the UI says so.
+# ---------------------------------------------------------------------
+
+ERA_YEARS: list[str] = ["1970", "1990", "2023"]
+
+# Corridor-wide traction and signalling timeline. Every stop on the
+# Pretoria-Cape Town corridor shared these three transitions, which is why a
+# train's *look* on this line changed as much as the stations did.
+CORRIDOR_ERAS: dict[str, dict] = {
+    "1970": {
+        "year": 1970,
+        "title": "Steam gives way to diesel",
+        "traction": "Steam on branch and heritage lines; Class 15/15A diesel-electrics entering mainline service",
+        "electrified": False,
+        "signalling": "Mechanical token and semaphore signalling, manual block working",
+        "corridor_note": (
+            "Mainline steam on the corridor was at its last by 1970. Steam survived longest "
+            "on the Karoo branch lines and at preservation sites — which is why the 1970s "
+            "story at Matjiesfontein still describes gas lamps and a Cape mail train."
+        ),
+    },
+    "1990": {
+        "year": 1990,
+        "title": "Diesel-electric, and the wires arrive",
+        "traction": "Class 15F and 6M1 diesel-electrics dominant across the Karoo and Cape mainline",
+        "electrified": True,
+        "signalling": "Route-locked interlockings, automatic block sections on the main line",
+        "corridor_note": (
+            "Electrification reached the Cape mainline through the Hex River Valley in the late "
+            "1980s, so by 1990 a train could change traction mid-corridor. The Karoo remained "
+            "diesel-only — the reason a 1990s Karoo journey is a diesel journey."
+        ),
+    },
+    "2023": {
+        "year": 2023,
+        "title": "Electric mainline, modern long-distance stock",
+        "traction": "Class 5M1 electrics on the electrified mainline; Shosholoza Meyl diesel coaching stock elsewhere",
+        "electrified": True,
+        "signalling": "Fully electronic block and interlocking on the Cape mainline",
+        "corridor_note": (
+            "The corridor now runs on two traction regimes at once. The Cape mainline is "
+            "electric; the Karoo is not. The same train changes type at De Aar, which is why "
+            "De Aar's role as a junction keeps mattering."
+        ),
+    },
+}
+
+# Per-station layout in each era, plus a note on what specifically changed
+# there. `platforms` and `tracks` drive the schematic; `change` is the human
+# sentence shown under it.
+STATION_ERA_LAYOUT: dict[str, dict[str, dict]] = {
+    "pretoria": {
+        "1970": {"platforms": 4, "tracks": 6, "station_class": "terminus",
+                 "change": "Four platform faces under the Herbert Baker trainshed; the Capital Park workshops still turning out steam-era stock."},
+        "1990": {"platforms": 4, "tracks": 6, "station_class": "terminus",
+                 "change": "Unchanged masonry, entirely changed trains: diesel-electrics on every platform."},
+        "2023": {"platforms": 5, "tracks": 7, "station_class": "terminus",
+                 "change": "An added platform face for Gautrain interchange, with the historic building restored behind the trading precinct."},
+    },
+    "johannesburg_park": {
+        "1970": {"platforms": 9, "tracks": 12, "station_class": "hub",
+                 "change": "Nine platforms under a vast trainshed, absorbing the migrant-labour traffic that defined the Rand in the 1970s."},
+        "1990": {"platforms": 10, "tracks": 13, "station_class": "hub",
+                 "change": "Metrorail electrification forces a rebuild of the concourse; an extra platform face added for suburban EMUs."},
+        "2023": {"platforms": 12, "tracks": 15, "station_class": "hub",
+                 "change": "Gautrain, Metrorail and Shosholoza Meyl stacked on three levels — the busiest interchange on the continent."},
+    },
+    "kimberley": {
+        "1970": {"platforms": 3, "tracks": 5, "station_class": "junction",
+                 "change": "A working junction for the Kimberley–Rustenburg and Bloemfontein branches, under constant mineral freight."},
+        "1990": {"platforms": 3, "tracks": 5, "station_class": "junction",
+                 "change": "Junction intact, freight thinner; the platform exits begin filling with informal traders."},
+        "2023": {"platforms": 4, "tracks": 5, "station_class": "junction",
+                 "change": "A tourism-facing platform added alongside the diamond-museum precinct, on an otherwise unchanged layout."},
+    },
+    "de_aar": {
+        "1970": {"platforms": 5, "tracks": 9, "station_class": "major_junction",
+                 "change": "The Karoo's great interchange, running 24-hour steam, with lines to Cape Town, Port Elizabeth and Namibia."},
+        "1990": {"platforms": 4, "tracks": 7, "station_class": "major_junction",
+                 "change": "Route rationalisation closes a siding; the yard is visibly smaller than it was a decade earlier."},
+        "2023": {"platforms": 3, "tracks": 5, "station_class": "junction",
+                 "change": "A working halt rather than a hub — but still the point where traction changes on the corridor."},
+    },
+    "beaufort_west": {
+        "1970": {"platforms": 3, "tracks": 5, "station_class": "junction",
+                 "change": "A watering stop of real consequence: steam engines took water here for the Karoo beyond."},
+        "1990": {"platforms": 2, "tracks": 4, "station_class": "junction",
+                 "change": "Steam regular working ends; the tank shrinks as diesels need no water stops."},
+        "2023": {"platforms": 2, "tracks": 4, "station_class": "junction",
+                 "change": "Platforms and tracks essentially unchanged for fifty years — the most stable layout on the corridor."},
+    },
+    "matjiesfontein": {
+        "1970": {"platforms": 1, "tracks": 2, "station_class": "passing_loop",
+                 "change": "A single platform and a passing loop, gas-lit, serving the Cape mail train's refreshment stop."},
+        "1990": {"platforms": 1, "tracks": 2, "station_class": "passing_loop",
+                 "change": "Unchanged in every structural respect — the reason it is a declared heritage site."},
+        "2023": {"platforms": 1, "tracks": 2, "station_class": "passing_loop",
+                 "change": "Still one platform, still two lines, still the Blue Train's mandatory stop."},
+    },
+    "worcester": {
+        "1970": {"platforms": 3, "tracks": 5, "station_class": "junction",
+                 "change": "Banking engines stood here ready to assist the climb through the Hex River pass."},
+        "1990": {"platforms": 3, "tracks": 5, "station_class": "junction",
+                 "change": "The Hex River electrification removes the need for bankers; the sidings they used sit empty."},
+        "2023": {"platforms": 4, "tracks": 6, "station_class": "junction",
+                 "change": "Electrified throughout, with an added platform face for Winelands tourism."},
+    },
+    "cape_town": {
+        "1970": {"platforms": 8, "tracks": 11, "station_class": "terminus",
+                 "change": "The grand terminus beneath Table Mountain, where the Blue Train and Trans-Karoo Express ended their runs."},
+        "1990": {"platforms": 8, "tracks": 12, "station_class": "terminus",
+                 "change": "Metrorail's suburban crush begins; the Edwardian building still standing over a transformed forecourt."},
+        "2023": {"platforms": 9, "tracks": 13, "station_class": "terminus",
+                 "change": "Restored Victorian facade opening onto a plaza of food markets, with MyCiTi buses outside."},
+    },
+}
+
+# Stops that have narrative eras but no surveyed layout yet. Rather than
+# inventing a platform count for them, the Time Machine shows the era
+# narrative alone and says the layout is not recorded.
+STATIONS_WITHOUT_LAYOUT: tuple[str, ...] = ("germiston", "klerksdorp")
+
+
+def get_era_details(stop_key: str) -> dict:
+    """
+    The Time Machine payload for one stop: the corridor-wide traction
+    timeline plus this station's per-era layout.
+
+    Returned keyed by year so the client can snap its slider straight to the
+    eras that actually have data, instead of landing on a year with nothing
+    behind it.
+    """
+    layout = STATION_ERA_LAYOUT.get(stop_key, {})
+    result: dict[str, dict] = {}
+
+    for year in ERA_YEARS:
+        if year not in TIMELINE_EVOLUTION.get(stop_key, {}):
+            continue
+        era = dict(CORRIDOR_ERAS[year])
+        era["narrative"] = TIMELINE_EVOLUTION[stop_key][year]
+        station = layout.get(year)
+        if station is None:
+            # Not fabricated. The client renders the narrative and says the
+            # layout is unrecorded rather than drawing an invented station.
+            era["layout"] = None
+            era["layout_recorded"] = False
+        else:
+            era["layout"] = station
+            era["layout_recorded"] = True
+        era["reconstruction"] = True
+        result[year] = era
+
+    return result
+
+
 def get_stop_content(stop_key: str) -> dict:
-    """Retrieve historical narrative, heritage sites, stalls, and geofence
-    coordinates for a given Shosholoza Meyl stop. Unknown stops fall back to
-    a generic corridor profile rather than erroring."""
+    """Retrieve historical narrative, heritage sites, stalls, geofence
+    coordinates, and Time Machine era details for a given Shosholoza Meyl
+    stop. Unknown stops fall back to a generic corridor profile rather than
+    erroring."""
     entry = SHOSHOLOZA_ROUTE_STORIES.get(stop_key, _DEFAULT_STOP_CONTENT)
     coordinates = STOP_COORDINATES.get(stop_key, (None, None))
-    eras = TIMELINE_EVOLUTION.get(stop_key, {})
+    era_details = get_era_details(stop_key)
     return {
         **entry,
         "heritage_sites": list(entry["heritage_sites"]),
         "local_stalls": list(entry["local_stalls"]),
         "lat": coordinates[0],
         "lon": coordinates[1],
-        "eras": eras,
+        "eras": {year: era["narrative"] for year, era in era_details.items()},
+        "era_details": era_details,
+        "era_years": sorted(era_details),
     }
