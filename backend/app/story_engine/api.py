@@ -26,9 +26,15 @@ from pydantic import BaseModel, Field
 
 from app.story_engine import spatial
 from app.story_engine.content_store import get_story, get_story_source, get_pois, get_stop_content
-from app.story_engine.eta import simulate_corridor_run
-from app.story_engine.geofence import check_geofence, find_triggered_waypoint, route_progress_fraction
+from app.story_engine.eta import MAX_SIMULATION_STEPS, simulate_corridor_run
+from app.story_engine.geofence import (
+    check_geofence,
+    find_triggered_waypoint,
+    next_waypoint_after,
+    route_progress_fraction,
+)
 from app.story_engine.guide import answer_question
+from app.story_engine.passport import build_passport
 from app.story_engine.journey import (
     GUARDIAN_TOKEN_PATTERN,
     JOURNEY_ID_PATTERN,
@@ -42,7 +48,7 @@ from app.story_engine.memories import (
     DEFAULT_NEARBY_RADIUS_METERS,
     memory_store,
 )
-from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
+from app.story_engine.route import PRETORIA_TO_CAPE_TOWN, Waypoint
 from app.story_engine.tickets import (
     MAX_TICKET_HOLD_HOURS,
     TicketValidationError,
@@ -617,7 +623,7 @@ class SimulateRunRequest(BaseModel):
     start_waypoint_id: str = "johannesburg_park"
     speed_kmh: float = Field(default=62.0, ge=5.0, le=140.0)
     step_minutes: float = Field(default=30.0, ge=1.0, le=720.0)
-    steps: int = Field(default=6, ge=1, le=7)
+    steps: int = Field(default=6, ge=1, le=MAX_SIMULATION_STEPS)
 
 class SimulateRunResponse(BaseModel):
     journey_id: str
@@ -779,9 +785,9 @@ def fetch_ticket(booking_reference: str) -> TicketResponse:
 def health() -> dict:
     """
     Liveness plus the one thing an operator actually needs to know after a
-    deploy: which spatial driver is live. `driver: "sqlite"` on a production
-    deployment means the PostGIS connection is not configured, and the ETA
-    numbers are being computed by the in-process fallback.
+    deploy: which spatial driver is live. `spatial_driver: "sqlite"` on a
+    production deployment means the PostGIS connection is not configured and
+    the ETA numbers are being computed by the in-process fallback.
     """
     return {
         "status": "ok",
@@ -792,7 +798,233 @@ def health() -> dict:
         "tracked_journeys": spatial.spatial_store.journey_count(),
         "tickets_issued": ticket_store.count(),
         "active_shared_riders": live_position_store.active_count(),
+        "qr_available": QR_AVAILABLE,
     }
+
+# ---------------------------------------------------------------------
+# Journey passport — a stamp per stop the journey actually reached.
+# ---------------------------------------------------------------------
+
+class PassportStamp(BaseModel):
+    waypoint_id: str
+    name: str
+    province: str
+    stamped_at: float
+    distance_meters: float
+    source: str
+    ordinal: int
+
+class PassportResponse(BaseModel):
+    journey_id: str
+    issued_at: float
+    stamps: list[PassportStamp]
+    stamps_earned: int
+    stamps_total: int
+    completion: float
+    provinces_visited: list[str]
+    complete: bool
+    coverage_note: str
+
+
+@app.get("/guardian/journeys/{journey_id}/passport", response_model=PassportResponse)
+def journey_passport(journey_id: str) -> PassportResponse:
+    """
+    The journey's passport, derived from its own persisted position history.
+
+    Stamps are computed, not posted. A client cannot award itself a stamp by
+    claiming it arrived somewhere, because the stamp only exists if a
+    corridor report puts the journey within 25km of that station.
+    """
+    if not is_valid_journey_id(journey_id):
+        raise HTTPException(status_code=422, detail="journey_id must be UUID-shaped")
+    return PassportResponse(**build_passport(journey_id))
+
+
+# ---------------------------------------------------------------------
+# Offline story pack — everything a rider needs at a stop, in one payload.
+#
+# The Karoo has no signal. A story split across four requests is a story
+# that does not appear when a train pulls into Matjiesfontein with no
+# bars, so the pack is assembled server-side into a single self-contained
+# response the client can cache whole.
+# ---------------------------------------------------------------------
+
+class OfflinePackResponse(BaseModel):
+    waypoint_id: str
+    waypoint_name: str
+    province: str
+    position: dict
+    progress_fraction: float
+    story: dict | None
+    story_source: str | None
+    pois: list[dict]
+    stop_content: dict | None
+    nearby_memories: list[dict]
+    next_waypoint: dict | None
+    packed_at: float
+
+
+def _offline_pack_for(waypoint: Waypoint, language: str = "en") -> dict:
+    story = get_story(waypoint.id, language_code=language)
+    upcoming = next_waypoint_after(waypoint.id)
+    return {
+        "waypoint_id": waypoint.id,
+        "waypoint_name": waypoint.name,
+        "province": waypoint.province,
+        "position": {
+            "lat": waypoint.latitude,
+            "lon": waypoint.longitude,
+            "cumulative_km": spatial.spatial_store.corridor_nodes()[
+                [n.waypoint_id for n in spatial.spatial_store.corridor_nodes()].index(waypoint.id)
+            ].cumulative_km,
+        },
+        "progress_fraction": route_progress_fraction(waypoint.latitude, waypoint.longitude),
+        "story": story.as_dict() if hasattr(story, "as_dict") else (
+            {"language_code": story.language_code, "text": story.text} if story else None
+        ),
+        "story_source": get_story_source(waypoint.id),
+        "pois": [p.as_dict() for p in get_pois(waypoint.id)],
+        "stop_content": get_stop_content(waypoint.id),
+        "nearby_memories": [m.as_dict() for m in memory_store.memories_near(
+            waypoint.latitude, waypoint.longitude, 5_000, 20
+        )],
+        "next_waypoint": (
+            {
+                "waypoint_id": upcoming.id,
+                "name": upcoming.name,
+                "province": upcoming.province,
+                "lat": upcoming.latitude,
+                "lon": upcoming.longitude,
+            }
+            if upcoming
+            else None
+        ),
+        "packed_at": time.time(),
+    }
+
+
+@app.get("/journey/offline-pack", response_model=OfflinePackResponse)
+def offline_pack(waypoint_id: str = "matjiesfontein", language: str = "en") -> OfflinePackResponse:
+    """
+    One stop's entire story, guide and memory payload in a single request.
+
+    This is what gets pre-cached before a train enters a dead zone. It is a
+    first-class endpoint rather than a bundle of the existing ones because
+    the client needs an all-or-nothing unit: a cached story with no nearby
+    memories is worse than no story at all, because the rider does not know
+    what they are missing.
+    """
+    waypoint = next((w for w in PRETORIA_TO_CAPE_TOWN if w.id == waypoint_id), None)
+    if waypoint is None:
+        raise HTTPException(status_code=422, detail=f"unknown waypoint_id: {waypoint_id!r}")
+    return OfflinePackResponse(**_offline_pack_for(waypoint, language=language))
+
+# ---------------------------------------------------------------------
+# QR boarding — a scannable code bound to a validated ticket.
+#
+# segno is imported lazily and the feature degrades to a clear 501 rather
+# than taking the rest of the API down, because nothing else here needs it.
+# ---------------------------------------------------------------------
+
+try:  # pragma: no cover - import-time branch
+    import segno
+
+    QR_AVAILABLE = True
+except ImportError:  # pragma: no cover - import-time branch
+    QR_AVAILABLE = False
+
+QR_BOARDING_PREFIX = "KASI-BOARD"
+
+
+class BoardingCodeResponse(BaseModel):
+    booking_reference: str
+    payload: str
+    scan_path: str
+    qr_svg: str | None
+    qr_available: bool
+    reason: str | None = None
+
+
+def _boarding_payload(reference: str, corridor_id: str) -> str:
+    return f"{QR_BOARDING_PREFIX}|{normalize_reference(reference)}|{corridor_id}"
+
+
+@app.get("/tickets/{booking_reference}/qr", response_model=BoardingCodeResponse)
+def ticket_qr(booking_reference: str) -> BoardingCodeResponse:
+    """
+    A QR code for a validated ticket, encoding the boarding payload a
+    conductor's scanner reads.
+
+    The payload carries the booking reference and corridor and nothing else
+    — no name, no seat, no contact details — because a boarding code is
+    readable by anyone who points a phone at it. The scan target is a public
+    validation endpoint, so scanning a code can only ever tell you whether a
+    ticket is admissible, never who bought it.
+    """
+    ticket = ticket_store.get_by_reference(booking_reference)
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"unknown booking reference: {normalize_reference(booking_reference)}",
+        )
+
+    reference = ticket.booking_reference
+    payload = _boarding_payload(reference, ticket.corridor_id)
+    scan_path = f"/scan/{reference.replace(' ', '%20')}"
+
+    if not QR_AVAILABLE:
+        return BoardingCodeResponse(
+            booking_reference=reference,
+            payload=payload,
+            scan_path=scan_path,
+            qr_svg=None,
+            qr_available=False,
+            reason="segno is not installed. Run: pip install segno",
+        )
+
+    import io
+
+    buffer = io.BytesIO()
+    segno.make(payload, error="m").save(buffer, kind="svg", scale=4, border=2, dark="#1a472a")
+    return BoardingCodeResponse(
+        booking_reference=reference,
+        payload=payload,
+        scan_path=scan_path,
+        qr_svg=buffer.getvalue().decode("utf-8"),
+        qr_available=True,
+    )
+
+
+class ScanResponse(BaseModel):
+    admissible: bool
+    reason: str
+    ticket: TicketResponse
+    scanned_at: float
+
+
+@app.get("/scan/{booking_reference}", response_model=ScanResponse)
+def scan_boarding_code(booking_reference: str) -> ScanResponse:
+    """
+    The scan target: what a conductor's phone gets when it reads a boarding
+    QR.
+
+    A GET rather than a POST because it is opened from a camera, and it
+    returns the same admissible/reason pair as the POST validation endpoint
+    so a scanner and the gate reader cannot disagree about whether a ticket
+    is valid.
+    """
+    try:
+        result = ticket_store.validate(booking_reference)
+    except TicketValidationError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ScanResponse(
+        admissible=result["admissible"],
+        reason=result["reason"],
+        ticket=TicketResponse(**result["ticket"]),
+        scanned_at=time.time(),
+    )
+
+
 
 
 # ---------------------------------------------------------------------
