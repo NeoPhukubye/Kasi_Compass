@@ -32,7 +32,6 @@ const els = {
     btnCompanion: document.getElementById('btn-companion'),
     btnStart: document.getElementById('btn-start-journey'),
     btnPause: document.getElementById('btn-pause-journey'),
-    btnBeginJourney: document.getElementById('btn-begin-journey'),
     btnLargePrint: document.getElementById('btn-large-print'),
     speedSlider: document.getElementById('speed-slider'),
     speedValue: document.getElementById('speed-value'),
@@ -100,7 +99,17 @@ function init() {
     els.btnCompanion.addEventListener('click', () => switchMode('companion'));
     els.btnStart.addEventListener('click', startExplorerJourney);
     els.btnPause.addEventListener('click', pauseExplorerJourney);
-    els.btnBeginJourney.addEventListener('click', beginJourney);
+    document.getElementById('btn-passenger').addEventListener('click', beginJourney);
+    document.getElementById('btn-tracker').addEventListener('click', () => {
+        document.getElementById('tracker-input').classList.remove('hidden');
+        document.getElementById('token-input').focus();
+    });
+document.getElementById('btn-track').addEventListener('click', () => {
+    const token = document.getElementById('token-input').value.trim();
+    if (token) {
+        window.location.href = `track.html#token=${token}`;
+    }
+});
     els.speedSlider.addEventListener('input', updateSpeed);
     els.btnGps.addEventListener('click', toggleCompanionMode);
     els.shareToggle.addEventListener('change', onShareToggleChanged);
