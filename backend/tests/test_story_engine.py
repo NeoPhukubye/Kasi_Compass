@@ -20,6 +20,7 @@ def test_route_has_expected_waypoints_in_order():
         "pretoria",
         "johannesburg_park",
         "kimberley",
+        "bloemfontein",
         "de_aar",
         "beaufort_west",
         "matjiesfontein",
@@ -67,7 +68,7 @@ def test_find_triggered_waypoint_returns_none_far_from_any_waypoint():
 
 
 def test_next_waypoint_after_sequences_correctly():
-    assert next_waypoint_after("kimberley").id == "de_aar"
+    assert next_waypoint_after("kimberley").id == "bloemfontein"
     assert next_waypoint_after("cape_town") is None
     assert next_waypoint_after("not_a_real_id") is None
 

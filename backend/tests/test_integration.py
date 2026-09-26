@@ -30,6 +30,7 @@ def test_route_endpoint_returns_all_waypoints_in_order():
         "pretoria",
         "johannesburg_park",
         "kimberley",
+        "bloemfontein",
         "de_aar",
         "beaufort_west",
         "matjiesfontein",
