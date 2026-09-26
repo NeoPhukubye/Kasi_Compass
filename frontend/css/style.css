@@ -706,52 +706,6 @@ footer {
     }
 }
 
-body {
-    font-family: sans-serif;
-    margin: 0;
-}
-
-#map {
-    height: 100vh;
-    width: 100vw;
-}
-
-#story-card {
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
-    right: 20px;
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    max-height: 40vh;
-    overflow-y: auto;
-}
-
-#story-card h2 {
-    margin-top: 0;
-}
-
-#story-card ul {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-}
-
-#story-card li {
-    padding: 8px 0;
-    border-bottom: 1px solid #eee;
-}
-
-#story-card li:last-child {
-    border-bottom: none;
-}
-
-.poi-description {
-    font-size: 0.9em;
-    color: #555;
-}
 
 /* ---------------------------------------------------------------------
    Journey Guardian, family tracking view, and Memory Vault.
@@ -1107,3 +1061,15 @@ body {
     height: auto;
     display: block;
 }
+
+.status-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ccc;
+    margin: 0.5rem auto;
+}
+
+.status-dot.green { background: #2d6a4f; }
+.status-dot.amber { background: #d4af37; }
+.status-dot.red { background: #a63d1f; }
