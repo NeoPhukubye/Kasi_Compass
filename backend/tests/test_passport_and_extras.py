@@ -158,7 +158,7 @@ def test_stamps_carry_provenance_and_distance(store):
 def test_stamps_record_the_provinces_crossed(store):
     simulate_corridor_run(JOURNEY_A, start_waypoint_id="pretoria", steps=50, step_minutes=30)
     assert build_passport(JOURNEY_A)["provinces_visited"] == [
-        "Gauteng", "Northern Cape", "Western Cape"
+        "Gauteng", "Northern Cape", "Free State", "Northern Cape", "Western Cape"
     ]
 
 

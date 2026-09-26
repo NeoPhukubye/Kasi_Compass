@@ -163,7 +163,7 @@ def test_milestones_include_every_station_and_every_province(store):
         assert expected in labels, f"{expected} missing from milestones"
 
     provinces = {m.label for m in build_milestones(position) if m.kind == "province_entry"}
-    assert provinces == {"Entered Northern Cape", "Entered Western Cape"}
+    assert provinces == {"Entered Free State", "Entered Northern Cape", "Entered Western Cape"}
 
 
 def test_milestones_keep_the_station_on_a_province_boundary(store):
@@ -187,7 +187,11 @@ def test_milestones_mark_what_has_been_passed(store):
     by_label = {m.label: m.reached for m in at_kimberley}
     assert by_label["Departed Pretoria"] is True
     assert by_label["Kimberley"] is True
-    assert by_label["Entered Northern Cape"] is True
+    # The corridor enters the Northern Cape twice (at Kimberley then De Aar,
+    # with Bloemfontein's Free State in between), so the label is not unique.
+    # Check the list rather than the dict for this one.
+    entered_nc = [m for m in at_kimberley if m.label == "Entered Northern Cape"]
+    assert any(m.reached for m in entered_nc)
     assert by_label["Cape Town"] is False
     assert by_label["Arrived Cape Town"] is False
 

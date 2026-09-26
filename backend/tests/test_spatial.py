@@ -41,10 +41,11 @@ def test_corridor_nodes_are_ordered_and_cumulative_km_increases(store):
 
 
 def test_corridor_total_is_plausible_for_a_1365km_corridor(store):
-    # Pretoria to Cape Town is roughly 1,300-1,450km by rail. A much smaller
-    # number means the unit maths broke; a much larger one means the haversine
-    # is being fed degrees where it expects radians or vice versa.
-    assert 1300.0 < store.total_km() < 1450.0
+    # Pretoria to Cape Town is roughly 1,300-1,600km by rail via Bloemfontein
+    # and Kimberley. A much smaller number means the unit maths broke; a much
+    # larger one means the haversine is being fed degrees where it expects
+    # radians or vice versa.
+    assert 1400.0 < store.total_km() < 1700.0
 
 
 def test_every_node_carries_a_province(store):

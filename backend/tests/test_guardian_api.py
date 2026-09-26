@@ -184,9 +184,9 @@ def test_a_full_corridor_run_completes_the_passport():
         json={"start_waypoint_id": "pretoria", "steps": 50, "step_minutes": 30},
     ).json()
     passport = client.get(f"/guardian/journeys/{run['journey_id']}/passport").json()
-    assert passport["stamps_earned"] == passport["stamps_total"] == 8
+    assert passport["stamps_earned"] == passport["stamps_total"] == 9
     assert passport["complete"] is True
-    assert passport["provinces_visited"] == ["Gauteng", "Northern Cape", "Western Cape"]
+    assert passport["provinces_visited"] == ["Gauteng", "Northern Cape", "Free State", "Northern Cape", "Western Cape"]
 
 
 def test_passport_endpoint_rejects_a_non_uuid_journey_id():
