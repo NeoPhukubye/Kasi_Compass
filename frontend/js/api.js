@@ -243,3 +243,40 @@ async function fetchHealth() {
     }
     return response.json();
 }
+
+// ---------------------------------------------------------------------
+// Journey passport, offline story packs, and QR boarding.
+// ---------------------------------------------------------------------
+
+async function fetchPassport(journeyId) {
+    const response = await fetch(`${API_BASE}/guardian/journeys/${journeyId}/passport`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch passport: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+async function fetchOfflinePack(waypointId, language = 'en') {
+    const query = new URLSearchParams({ waypoint_id: waypointId, language });
+    const response = await fetch(`${API_BASE}/journey/offline-pack?${query.toString()}`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch offline pack: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+async function fetchTicketQr(bookingReference) {
+    const response = await fetch(`${API_BASE}/tickets/${encodeURIComponent(bookingReference)}/qr`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch boarding code: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+async function scanBoardingCode(bookingReference) {
+    const response = await fetch(`${API_BASE}/scan/${encodeURIComponent(bookingReference)}`);
+    if (!response.ok) {
+        throw new Error(`Scan failed: ${response.statusText}`);
+    }
+    return response.json();
+}
