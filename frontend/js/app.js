@@ -30,6 +30,7 @@ let currentStopData = null;
 const els = {
     btnExplorer: document.getElementById('btn-explorer'),
     btnCompanion: document.getElementById('btn-companion'),
+    modeSwitcher: document.getElementById('mode-switcher'),
     btnStart: document.getElementById('btn-start-journey'),
     btnPause: document.getElementById('btn-pause-journey'),
     btnLargePrint: document.getElementById('btn-large-print'),
@@ -168,16 +169,34 @@ function initPrasa() {
 }
 
 function beginJourney() {
-    document.getElementById('hero').style.display = 'none';
-    document.getElementById('map-container').style.display = 'block';
-    document.getElementById('language-switcher').classList.remove('hidden');
+    document.querySelector('.hero-choices').classList.add('hidden');
+    document.querySelector('.hero-question').classList.add('hidden');
 
-    initMap();
-    loadRoute();
+    document.getElementById('passenger-modes').classList.remove('hidden');
 
-    document.getElementById('map-container').scrollIntoView({
+    document.getElementById('passenger-modes').scrollIntoView({
         behavior: 'smooth'
     });
+}
+
+function startAsExplorer() {
+    document.getElementById('hero').style.display = 'none';
+    document.getElementById('language-switcher').classList.remove('hidden');
+    document.getElementById('map-container').style.display = 'block';
+    switchMode('explorer');
+    initMap();
+    loadRoute();
+    document.getElementById('map-container').scrollIntoView({ behavior: 'smooth' });
+}
+
+function startAsCompanion() {
+    document.getElementById('hero').style.display = 'none';
+    document.getElementById('language-switcher').classList.remove('hidden');
+    document.getElementById('map-container').style.display = 'block';
+    switchMode('companion');
+    initMap();
+    loadRoute();
+    document.getElementById('map-container').scrollIntoView({ behavior: 'smooth' });
 }
 
 function toggleLargePrint() {
@@ -188,6 +207,13 @@ function toggleLargePrint() {
 }
 
 function init() {
+    els.modeSwitcher.style.display = 'none';
+    els.explorerControls.classList.add('hidden');
+    els.companionControls.classList.add('hidden');
+    document.getElementById('journey-progress').classList.add('hidden');
+    document.getElementById('guardian').classList.add('hidden');
+    document.getElementById('passport').classList.add('hidden');
+    document.getElementById('passenger-modes').classList.add('hidden');
     // Large-print toggle for elderly users
     els.btnLargePrint.addEventListener('click', toggleLargePrint);
 
@@ -196,10 +222,15 @@ function init() {
     els.btnStart.addEventListener('click', startExplorerJourney);
     els.btnPause.addEventListener('click', pauseExplorerJourney);
     document.getElementById('btn-passenger').addEventListener('click', beginJourney);
-    document.getElementById('btn-tracker').addEventListener('click', () => {
-        document.getElementById('tracker-input').classList.remove('hidden');
-        document.getElementById('token-input').focus();
-    });
+
+document.getElementById('btn-explorer-choice').addEventListener('click', startAsExplorer);
+
+document.getElementById('btn-companion-choice').addEventListener('click', startAsCompanion);
+
+document.getElementById('btn-tracker').addEventListener('click', () => {
+    document.getElementById('tracker-input').classList.remove('hidden');
+    document.getElementById('token-input').focus();
+});
 document.getElementById('btn-track').addEventListener('click', () => {
     const token = document.getElementById('token-input').value.trim();
     if (token) {
@@ -269,6 +300,9 @@ function handleKeydown(e) {
 
 function switchMode(mode) {
     currentMode = mode;
+    document.getElementById('journey-progress').classList.remove('hidden');
+    document.getElementById('guardian').classList.remove('hidden');
+    document.getElementById('passport').classList.remove('hidden');
 
     if (mode === 'explorer') {
         els.btnExplorer.classList.add('active');

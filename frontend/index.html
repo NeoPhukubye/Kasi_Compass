@@ -29,16 +29,23 @@
 
             <p class="hero-question">Who are you?</p>
             <div class="hero-choices">
-    <button id="btn-passenger">🚆 I'm a Passenger</button>
-    <button id="btn-tracker">🔍 I'm a Tracker</button>
+            <button id="btn-passenger">🚆 I'm a Passenger</button>
+            <button id="btn-tracker">🔍 I'm a Tracker</button>
+            </div>
+            <div id="passenger-modes" class="hidden">
+                <p class="hero-question">How would you like to experience your journey?</p>
+
+                <div class="hero-choices">
+                    <button id="btn-explorer-choice">🧭 Explorer Mode</button>
+                    <button id="btn-companion-choice">👥 Companion Mode</button>
+                </div>
             </div>
             <div id="tracker-input" class="hidden">
             <input type="text" id="token-input" placeholder="Enter your tracking code" aria-label="Tracking token">
             <button id="btn-track">Track Journey</button>
-</div>
-
-           
+            </div>
         </section>
+        
 
         <nav id="mode-switcher" role="navigation" aria-label="Journey mode">
             <button id="btn-explorer" class="active" aria-pressed="true">Explorer Mode</button>
