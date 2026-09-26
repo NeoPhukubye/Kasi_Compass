@@ -6,6 +6,9 @@ let lastFocusedElement = null;
 let sharingPosition = false;
 let sharedPositionsInterval = null;
 
+// Large-print mode toggle for elderly users
+let largePrintMode = false;
+
 // Waypoints whose stop-insights were already shown during the current
 // explorer run, so the journey auto-pauses exactly once per stop instead
 // of re-pausing every few seconds while passing it.
@@ -30,6 +33,7 @@ const els = {
     btnStart: document.getElementById('btn-start-journey'),
     btnPause: document.getElementById('btn-pause-journey'),
     btnBeginJourney: document.getElementById('btn-begin-journey'),
+    btnLargePrint: document.getElementById('btn-large-print'),
     speedSlider: document.getElementById('speed-slider'),
     speedValue: document.getElementById('speed-value'),
     btnGps: document.getElementById('btn-gps'),
@@ -81,8 +85,16 @@ function beginJourney() {
     });
 }
 
+function toggleLargePrint() {
+    largePrintMode = !largePrintMode;
+    document.body.classList.toggle('large-print', largePrintMode);
+    els.btnLargePrint.textContent = largePrintMode ? 'Aa-' : 'Aa+';
+    els.btnLargePrint.setAttribute('aria-pressed', String(largePrintMode));
+}
+
 function init() {
-    
+    // Large-print toggle for elderly users
+    els.btnLargePrint.addEventListener('click', toggleLargePrint);
 
     els.btnExplorer.addEventListener('click', () => switchMode('explorer'));
     els.btnCompanion.addEventListener('click', () => switchMode('companion'));
