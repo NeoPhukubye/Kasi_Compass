@@ -4,3 +4,9 @@ fastapi>=0.100.0
 uvicorn[standard]>=0.23.0
 pydantic>=2.0.0
 google-genai>=1.0.0
+
+# QR boarding codes. Pure Python, no compiled extensions, no billing account.
+# Optional at runtime: api.py imports it lazily and the boarding-code endpoint
+# returns a clear 501-style reason (with `qr_available: false` in the payload)
+# when it is absent, so the rest of the API is unaffected.
+segno>=1.6.0
