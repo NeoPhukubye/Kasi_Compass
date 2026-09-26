@@ -232,6 +232,62 @@
                 <ul id="memory-list" class="memory-list"></ul>
             </section>
 
+            <section id="zulzi-panel" class="hidden" role="region" aria-labelledby="zulzi-title">
+                <h3 id="zulzi-title">Zulzi — carriage delivery</h3>
+                <p class="panel-note">
+                    Pre-order padstols, refreshments, and essentials from station-side vendors.
+                    Your order is delivered to your carriage when the train pulls into the stop.
+                </p>
+
+                <div class="zulzi-stops">
+                    <label for="zulzi-stop">Delivery stop</label>
+                    <select id="zulzi-stop">
+                        <option value="">Select a stop…</option>
+                    </select>
+                </div>
+
+                <p id="zulzi-vendors-empty" class="panel-note">Pick a stop to see its vendors.</p>
+
+                <div id="zulzi-vendors" class="zulzi-grid hidden" role="list"></div>
+
+                <div id="zulzi-menu" class="hidden">
+                    <button id="zulzi-back-to-vendors" class="zulzi-back" type="button" aria-label="Back to vendors">← Back</button>
+                    <h4 id="zulzi-menu-vendor"></h4>
+                    <ul id="zulzi-menu-list" class="memory-list" role="list"></ul>
+                </div>
+
+                <div id="zulzi-cart" class="hidden">
+                    <h4>Your carriage order</h4>
+                    <ul id="zulzi-cart-items" class="memory-list"></ul>
+                    <p id="zulzi-cart-total" class="zulzi-cart-total"></p>
+                    <div class="zulzi-cart-fields">
+                        <label for="zulzi-carriage">Carriage</label>
+                        <input id="zulzi-carriage" type="text" placeholder="e.g. 3" autocomplete="off">
+                        <label for="zulzi-seat">Seat</label>
+                        <input id="zulzi-seat" type="text" placeholder="e.g. 12A" autocomplete="off">
+                    </div>
+                    <button id="zulzi-place-order" type="button">Place order</button>
+                    <button id="zulzi-clear-cart" type="button" class="zulzi-secondary">Clear</button>
+                </div>
+
+                <div id="zulzi-order-status" class="hidden">
+                    <h4>Order status</h4>
+                    <p id="zulzi-order-id"></p>
+                    <p id="zulzi-order-items"></p>
+                    <p id="zulzi-order-total"></p>
+                    <p id="zulzi-order-status"></p>
+                    <p id="zulzi-order-delivery"></p>
+                    <div class="zulzi-order-actions">
+                        <button id="zulzi-cancel-order" type="button" class="zulzi-secondary">Cancel order</button>
+                        <button id="zulzi-received-order" type="button">Mark received</button>
+                        <button id="zulzi-advance-order" type="button" class="zulzi-secondary">Simulate next step</button>
+                    </div>
+                </div>
+
+                <p id="zulzi-status" class="zulzi-status" aria-live="polite"></p>
+            </section>
+
+
             <section id="prasa-panel" role="region" aria-labelledby="prasa-title" class="hidden">
                 <h3 id="prasa-title">PRASA timetable &amp; live status</h3>
                 <p class="panel-note">
@@ -278,6 +334,7 @@
     <script src="js/geo.js"></script>
     <script src="js/api.js"></script>
     <script src="js/live-share.js"></script>
+    <script src="js/zulzi.js"></script>
     <script src="js/map.js"></script>
     <script src="js/guardian.js"></script>
     <script src="js/offline.js"></script>
