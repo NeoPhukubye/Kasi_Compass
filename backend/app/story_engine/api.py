@@ -865,8 +865,39 @@ class OfflinePackResponse(BaseModel):
 
 
 def _offline_pack_for(waypoint: Waypoint, language: str = "en") -> dict:
+    """
+    Assemble one stop's entire offline payload.
+
+    The story falls back to the stop's historical narrative when no
+    ride-along story has been written yet, which is the case for six of the
+    eight corridor stations. Shipping that gap as an empty field would mean a
+    rider in a dead zone reaches a stop and gets nothing, even though a
+    human-sourced narrative for that same stop is sitting in the same
+    content store. `story_source` says which one they are reading, so the
+    fallback is never mistaken for the fuller thing.
+    """
     story = get_story(waypoint.id, language_code=language)
+    stop_content = get_stop_content(waypoint.id)
     upcoming = next_waypoint_after(waypoint.id)
+
+    if story is not None:
+        story_payload = {
+            "language_code": story.language_code,
+            "text": story.text,
+            "kind": "ride-along story",
+        }
+    else:
+        story_payload = {
+            "language_code": language,
+            "text": stop_content["historical_narrative"],
+            "kind": "stop narrative",
+        }
+
+    nodes = spatial.spatial_store.corridor_nodes()
+    cumulative = next(
+        (n.cumulative_km for n in nodes if n.waypoint_id == waypoint.id), 0.0
+    )
+
     return {
         "waypoint_id": waypoint.id,
         "waypoint_name": waypoint.name,
@@ -874,17 +905,13 @@ def _offline_pack_for(waypoint: Waypoint, language: str = "en") -> dict:
         "position": {
             "lat": waypoint.latitude,
             "lon": waypoint.longitude,
-            "cumulative_km": spatial.spatial_store.corridor_nodes()[
-                [n.waypoint_id for n in spatial.spatial_store.corridor_nodes()].index(waypoint.id)
-            ].cumulative_km,
+            "cumulative_km": cumulative,
         },
         "progress_fraction": route_progress_fraction(waypoint.latitude, waypoint.longitude),
-        "story": story.as_dict() if hasattr(story, "as_dict") else (
-            {"language_code": story.language_code, "text": story.text} if story else None
-        ),
-        "story_source": get_story_source(waypoint.id),
+        "story": story_payload,
+        "story_source": get_story_source(waypoint.id) or "content_store historical narrative",
         "pois": [p.as_dict() for p in get_pois(waypoint.id)],
-        "stop_content": get_stop_content(waypoint.id),
+        "stop_content": stop_content,
         "nearby_memories": [m.as_dict() for m in memory_store.memories_near(
             waypoint.latitude, waypoint.longitude, 5_000, 20
         )],
