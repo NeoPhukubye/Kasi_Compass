@@ -43,6 +43,15 @@ from app.story_engine.journey import (
     journey_registry,
 )
 from app.story_engine.live_share import RIDER_ID_PATTERN, live_position_store
+from app.story_engine.zulzi import (
+    MenuItem,
+    OrderValidationError,
+    STATUS_CANCELLED,
+    Vendor,
+    ZulziOrder,
+    format_order_response,
+    zulzi_store,
+)
 from app.story_engine.memories import (
     DEFAULT_MEMORIES_LIMIT,
     DEFAULT_NEARBY_RADIUS_METERS,
@@ -799,6 +808,12 @@ def health() -> dict:
         "tickets_issued": ticket_store.count(),
         "active_shared_riders": live_position_store.active_count(),
         "qr_available": QR_AVAILABLE,
+        "zulzi": {
+            "source": "live-api" if zulzi_store.is_live else "mock-catalog",
+            "supported_stops": len(zulzi_store.supported_stops()),
+            "active_orders": sum(1 for o in zulzi_store._orders.values()  # noqa: SLF001 - read-only count
+                                 if o.status not in ("delivered_to_carriage", "received", "cancelled")),
+        },
     }
 
 # ---------------------------------------------------------------------
@@ -1052,6 +1067,236 @@ def scan_boarding_code(booking_reference: str) -> ScanResponse:
     )
 
 
+# ---------------------------------------------------------------------
+# Zulzi station-hub commerce — pre-order from station-side vendors and have
+# the order delivered to the train carriage when the train pulls in.
+#
+# This is the "in-transit station commerce" claim: a partner adapter over a
+# human-curated per-stop vendor catalog + order book. The catalog is local
+# (mock) so the demo runs with zero configuration; set ZULZI_API_BASE and
+# ZULZI_API_KEY to route order placement through the real Zulzi partner API,
+# with the mock as the fallback the moment that call fails — never a hard
+# dependency on an external service being up.
+#
+# rider_id reuses the UUID pattern shared with the live-position / memories
+# surface, so a single rider identity (anonymous, client-generated, no name)
+# spans the whole app.
+# ---------------------------------------------------------------------
+
+class OrderLineItemRequest(BaseModel):
+    item_id: str
+    quantity: int = Field(ge=1, le=20)
+
+
+class PlaceOrderRequest(BaseModel):
+    rider_id: str = Field(pattern=UUID_RIDER_ID_PATTERN)
+    waypoint_id: str
+    vendor_id: str
+    carriage: str = Field(min_length=1, max_length=40)
+    seat: str = Field(min_length=1, max_length=20)
+    items: list[OrderLineItemRequest] = Field(min_length=1)
+    journey_id: str | None = Field(default=None, pattern=JOURNEY_ID_PATTERN)
+
+
+class OrderLineResponse(BaseModel):
+    item_id: str
+    name: str
+    quantity: int
+    unit_price: float
+    total: float
+
+
+class ZulziVendorResponse(BaseModel):
+    vendor_id: str
+    waypoint_id: str
+    name: str
+    category: str
+    description: str | None = None
+    rating: float | None = None
+    image_url: str | None = None
+
+
+class ZulziMenuResponse(BaseModel):
+    vendor_id: str
+    vendor_name: str
+    items: list[dict]
+
+
+class ZulziOrderResponse(BaseModel):
+    order_id: str
+    rider_id: str
+    waypoint_id: str
+    waypoint_name: str
+    vendor_id: str
+    vendor_name: str
+    carriage: str
+    seat: str
+    items: list[OrderLineResponse]
+    total_amount: float
+    currency: str
+    status: str
+    status_label: str
+    delivery_eta: float | None = None
+    placed_at: float
+    updated_at: float
+    tracking_ref: str | None = None
+    source: str
+
+
+class ZulziStopResponse(BaseModel):
+    waypoint_id: str
+    name: str
+    province: str
+    vendor_count: int
+
+
+zulzi_router = APIRouter(prefix="/zulzi", tags=["Zulzi Commerce"])
+
+
+@zulzi_router.get("/stops", response_model=list[ZulziStopResponse])
+def zulzi_stops() -> list[ZulziStopResponse]:
+    """Corridor stops that accept Zulzi carriage delivery, with a vendor count
+    per stop so the rider can see at a glance where the menu is widest."""
+    result = []
+    for waypoint in PRETORIA_TO_CAPE_TOWN:
+        if waypoint.id in zulzi_store.supported_stops():
+            vendors = zulzi_store.vendors_at(waypoint.id)
+            result.append(ZulziStopResponse(
+                waypoint_id=waypoint.id,
+                name=waypoint.name,
+                province=waypoint.province,
+                vendor_count=len(vendors),
+            ))
+    return result
+
+
+@zulzi_router.get("/vendors", response_model=list[ZulziVendorResponse])
+def zulzi_vendors(waypoint_id: str) -> list[ZulziVendorResponse]:
+    """All Zulzi-servicing vendors at a corridor stop."""
+    if waypoint_id not in zulzi_store.supported_stops():
+        raise HTTPException(status_code=422, detail=f"unknown corridor stop: {waypoint_id!r}")
+    vendors = zulzi_store.vendors_at(waypoint_id)
+    return [ZulziVendorResponse(**{
+        "vendor_id": v.vendor_id, "waypoint_id": v.waypoint_id, "name": v.name,
+        "category": v.category, "description": v.description, "rating": v.rating,
+        "image_url": v.image_url,
+    }) for v in vendors]
+
+
+@zulzi_router.get("/vendors/{vendor_id}", response_model=ZulziVendorResponse)
+def zulzi_vendor_detail(vendor_id: str) -> ZulziVendorResponse:
+    """A single vendor's profile."""
+    vendor = zulzi_store.vendor_detail(vendor_id)
+    if vendor is None:
+        raise HTTPException(status_code=404, detail=f"unknown vendor: {vendor_id!r}")
+    return ZulziVendorResponse(**{
+        "vendor_id": vendor.vendor_id, "waypoint_id": vendor.waypoint_id, "name": vendor.name,
+        "category": vendor.category, "description": vendor.description, "rating": vendor.rating,
+        "image_url": vendor.image_url,
+    })
+
+
+@zulzi_router.get("/vendors/{vendor_id}/menu", response_model=ZulziMenuResponse)
+def zulzi_menu(vendor_id: str) -> ZulziMenuResponse:
+    """A vendor's current menu, only including items available for delivery."""
+    vendor = zulzi_store.vendor_detail(vendor_id)
+    if vendor is None:
+        raise HTTPException(status_code=404, detail=f"unknown vendor: {vendor_id!r}")
+    menu = zulzi_store.menu_for(vendor_id)
+    return ZulziMenuResponse(
+        vendor_id=vendor_id,
+        vendor_name=vendor.name,
+        items=[m.__dict__ for m in menu],
+    )
+
+
+@zulzi_router.post("/orders", response_model=ZulziOrderResponse, status_code=201)
+def place_zulzi_order(payload: PlaceOrderRequest) -> ZulziOrderResponse:
+    """
+    Place a carriage-delivery order with Zulzi.
+
+    The order is anchored to a corridor stop the rider will reach, with a
+    carriage + seat so the last-mile partner knows where to meet the train.
+    Validation failures (unknown stop, mismatched vendor, unavailable item,
+    bad rider/journey id) return 422, matching how the rest of the API
+    handles malformed input.
+    """
+    try:
+        order = zulzi_store.place_order(
+            rider_id=payload.rider_id,
+            waypoint_id=payload.waypoint_id,
+            vendor_id=payload.vendor_id,
+            carriage=payload.carriage,
+            seat=payload.seat,
+            items=[{"item_id": i.item_id, "quantity": i.quantity} for i in payload.items],
+            journey_id=payload.journey_id,
+        )
+    except OrderValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ZulziOrderResponse(**format_order_response(order))
+
+
+@zulzi_router.get("/orders/{order_id}", response_model=ZulziOrderResponse)
+def zulzi_order(order_id: str) -> ZulziOrderResponse:
+    """Fetch an order and walk its status forward (mock) if eligible."""
+    order = zulzi_store.get_order(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"unknown order: {order_id!r}")
+    return ZulziOrderResponse(**format_order_response(order))
+
+
+@zulzi_router.get("/orders", response_model=list[ZulziOrderResponse])
+def zulzi_rider_orders(
+    rider_id: str = Query(pattern=UUID_RIDER_ID_PATTERN),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> list[ZulziOrderResponse]:
+    """A rider's order history, newest first."""
+    orders = zulzi_store.orders_for_rider(rider_id)[:limit]
+    return [ZulziOrderResponse(**format_order_response(o), items=[li.as_dict() for li in o.items]) for o in orders]
+
+
+@zulzi_router.post("/orders/{order_id}/cancel", response_model=ZulziOrderResponse)
+def cancel_zulzi_order(order_id: str) -> ZulziOrderResponse:
+    """Cancel an order before it leaves the vendor. A 409 if it is too late."""
+    order = zulzi_store.get_order(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"unknown order: {order_id!r}")
+    prior_status = order.status
+    order = zulzi_store.cancel_order(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"unknown order: {order_id!r}")
+    if order.status != STATUS_CANCELLED:
+        raise HTTPException(
+            status_code=409,
+            detail=f"order is in '{prior_status}' status and can no longer be cancelled — it is en route to the platform",
+        )
+    return ZulziOrderResponse(**format_order_response(order))
+
+
+@zulzi_router.post("/orders/{order_id}/received", response_model=ZulziOrderResponse)
+def confirm_zulzi_received(order_id: str) -> ZulziOrderResponse:
+    """Rider confirms the carriage hand-off was completed."""
+    order = zulzi_store.confirm_received(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"unknown order: {order_id!r}")
+    return ZulziOrderResponse(**format_order_response(order))
+
+
+@zulzi_router.post("/orders/{order_id}/advance", response_model=ZulziOrderResponse)
+def advance_zulzi_order(order_id: str) -> ZulziOrderResponse:
+    """
+    Advance a mock order one lifecycle step.
+
+    This simulates Zulzi's background worker walking an order from
+    confirmed → preparing → out for delivery → ... → delivered to carriage.
+    It is a no-op for orders placed against the live partner API, where the
+    partner is the source of truth for status. Exposed so the demo can step
+    an order through its pipeline on demand instead of waiting on a timer.
+    """
+    order = zulzi_store.advance_order(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"unknown order: {order_id!r}")
+    return ZulziOrderResponse(**format_order_response(order))
 
 
 # ---------------------------------------------------------------------
@@ -1145,3 +1390,4 @@ except ImportError:
     pass
 
 app.include_router(story_engine_router)
+app.include_router(zulzi_router)
