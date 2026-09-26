@@ -58,6 +58,8 @@ _STOP_ALIASES: dict[str, str] = {
     "germiston": "germiston",
     "kimberley": "kimberley",
     "big hole": "kimberley",
+    "bloemfontein": "bloemfontein",
+    "bloem": "bloemfontein",
     "klerksdorp": "klerksdorp",
     "de aar": "de_aar",
     "deaar": "de_aar",
@@ -85,7 +87,7 @@ def _corpus_answer(question: str, stop_id: str | None) -> str:
     if stop_id is None:
         return (
             "The Kasi Compass corridor runs from Pretoria to Cape Town, joining Johannesburg, "
-            "Germiston, Klerksdorp, Kimberley, De Aar, Beaufort West, Matjiesfontein, and "
+            "Germiston, Bloemfontein, Kimberley, De Aar, Beaufort West, Matjiesfontein, and "
             "Worcester. Ask about any of these stops and the guide will share their "
             "human-reviewed history, heritage sites, and the local stalls around the station."
         )
