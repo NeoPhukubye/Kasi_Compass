@@ -20,6 +20,13 @@ const guardianState = {
 // well inside what a person waiting for news would actually notice.
 const GUARDIAN_POLL_MS = 10000;
 
+// The demo corridor feed runs the full Pretoria-Cape Town length so the
+// passport fills with every station. Sample count, not distance, is what
+// decides whether a stamp lands: too few samples and the feed steps straight
+// over a station without ever coming within stamping distance of it.
+const DEMO_FEED_STEPS = 50;
+const DEMO_FEED_STEP_MINUTES = 30;
+
 function formatEtaTime(iso) {
     if (!iso) return '—';
     const date = new Date(iso);
@@ -103,9 +110,60 @@ async function pollGuardianEta() {
                 : `Last corridor report ${Math.round(eta.last_report_seconds_ago)}s ago — served by ${eta.position.driver}.`,
             eta.status === 'signal_lost' ? 'warn' : 'info',
         );
+        // The passport grows as the journey does, so it is re-read on the
+        // same cadence rather than needing its own timer.
+        await renderPassport(guardianState.journeyId);
     } catch (err) {
         console.error('Guardian poll failed:', err);
         setGuardianStatus('Lost contact with the backend.', 'warn');
+    }
+}
+
+// ---------------------------------------------------------------------
+// Journey passport
+// ---------------------------------------------------------------------
+
+async function renderPassport(journeyId) {
+    try {
+        const passport = await fetchPassport(journeyId);
+        document.getElementById('passport-progress').textContent = passport.complete
+            ? 'Corridor complete — every station stamped.'
+            : `${passport.stamps_earned} of ${passport.stamps_total} stations stamped.`;
+
+        const list = document.getElementById('passport-stamps');
+        list.innerHTML = '';
+        for (const stamp of passport.stamps) {
+            const item = document.createElement('li');
+            item.className = 'stamp';
+
+            const name = document.createElement('span');
+            name.className = 'stamp-name';
+            name.textContent = stamp.name;
+
+            const province = document.createElement('span');
+            province.className = 'stamp-province';
+            province.textContent = stamp.province;
+
+            const when = document.createElement('span');
+            when.className = 'stamp-time';
+            when.textContent = new Date(stamp.stamped_at * 1000).toLocaleString(undefined, {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+
+            const source = document.createElement('span');
+            source.className = 'stamp-source';
+            source.textContent = `via ${stamp.source.replace(/_/g, ' ')}`;
+
+            item.append(name, province, when, source);
+            list.appendChild(item);
+        }
+
+        document.getElementById('passport-note').textContent = passport.coverage_note;
+    } catch (err) {
+        console.error('Failed to render passport:', err);
     }
 }
 
@@ -116,10 +174,16 @@ async function startGuardianFeed() {
 
     try {
         const startWaypoint = document.getElementById('guardian-start')?.value || 'johannesburg_park';
-        const result = await simulateRun({ startWaypointId: startWaypoint, steps: 6, speedKmh: 62 });
+        const result = await simulateRun({
+            startWaypointId: startWaypoint,
+            steps: DEMO_FEED_STEPS,
+            stepMinutes: DEMO_FEED_STEP_MINUTES,
+            speedKmh: 62,
+        });
         guardianState.journeyId = result.journey_id;
         document.getElementById('guardian-panel').classList.remove('hidden');
         renderGuardianEta(result.eta);
+        await renderPassport(result.journey_id);
 
         // Mint the family link immediately so the demo always has one to show
         // — the link is the deliverable a family member would actually get.
