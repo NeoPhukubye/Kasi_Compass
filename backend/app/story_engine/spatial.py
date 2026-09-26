@@ -317,6 +317,30 @@ class SpatialStore:
         CREATE INDEX IF NOT EXISTS corridor_waypoints_geom
             ON corridor_waypoints USING GIST (geom);
         """,
+        """
+        CREATE TABLE IF NOT EXISTS guardian_journeys (
+            journey_id              TEXT PRIMARY KEY,
+            corridor_id             TEXT NOT NULL,
+            origin_waypoint_id      TEXT NOT NULL,
+            destination_waypoint_id TEXT NOT NULL,
+            created_at              DOUBLE PRECISION NOT NULL,
+            ticket_id               TEXT
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS guardian_links (
+            token         TEXT PRIMARY KEY,
+            journey_id    TEXT NOT NULL,
+            created_at    DOUBLE PRECISION NOT NULL,
+            revoked       BOOLEAN NOT NULL DEFAULT FALSE,
+            label         TEXT NOT NULL DEFAULT 'family',
+            display_name  TEXT NOT NULL DEFAULT ''
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS guardian_links_journey
+            ON guardian_links (journey_id, revoked);
+        """,
     )
 
     _SQLITE_SCHEMA = (
@@ -352,6 +376,30 @@ class SpatialStore:
         """
         CREATE INDEX IF NOT EXISTS journey_telemetry_lookup
             ON journey_telemetry (journey_id, recorded_at DESC);
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS guardian_journeys (
+            journey_id            TEXT PRIMARY KEY,
+            corridor_id           TEXT NOT NULL,
+            origin_waypoint_id    TEXT NOT NULL,
+            destination_waypoint_id TEXT NOT NULL,
+            created_at            DOUBLE PRECISION NOT NULL,
+            ticket_id             TEXT
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS guardian_links (
+            token         TEXT PRIMARY KEY,
+            journey_id    TEXT NOT NULL,
+            created_at    DOUBLE PRECISION NOT NULL,
+            revoked       INTEGER NOT NULL DEFAULT 0,
+            label         TEXT NOT NULL DEFAULT 'family',
+            display_name  TEXT NOT NULL DEFAULT ''
+        );
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS guardian_links_journey
+            ON guardian_links (journey_id, revoked);
         """,
     )
 
@@ -765,6 +813,148 @@ class SpatialStore:
             "SELECT COUNT(DISTINCT journey_id) AS n FROM journey_telemetry"
         ).fetchone()
         return int(row["n"]) if row else 0
+
+    # ------------------------------------------------------------------
+    # Guardian journeys and links
+    #
+    # Persisting these matters for a reason that is easy to underrate: a
+    # family tracking link is a capability somebody has already pasted into
+    # a WhatsApp message. If a redeploy invalidates it, the product silently
+    # breaks the promise it was built on, and the person who finds out is the
+    # family member, not the operator.
+    # ------------------------------------------------------------------
+
+    def save_journey(self, journey: dict) -> None:
+        """Upsert a journey's own record. Journey *positions* live in
+        journey_telemetry; this is the identity that links them together."""
+        self.connect()
+        self._conn.execute(  # type: ignore[attr-defined]
+            """
+            INSERT INTO guardian_journeys
+                (journey_id, corridor_id, origin_waypoint_id,
+                 destination_waypoint_id, created_at, ticket_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(journey_id) DO UPDATE SET
+                corridor_id = excluded.corridor_id,
+                origin_waypoint_id = excluded.origin_waypoint_id,
+                destination_waypoint_id = excluded.destination_waypoint_id,
+                ticket_id = excluded.ticket_id
+            """,
+            (
+                journey["journey_id"],
+                journey["corridor_id"],
+                journey["origin_waypoint_id"],
+                journey["destination_waypoint_id"],
+                journey["created_at"],
+                journey.get("ticket_id"),
+            ),
+        )
+        self._conn.commit()  # type: ignore[attr-defined]
+
+    def load_journeys(self) -> list[dict]:
+        self.connect()
+        rows = self._conn.execute(  # type: ignore[attr-defined]
+            """
+            SELECT journey_id, corridor_id, origin_waypoint_id,
+                   destination_waypoint_id, created_at, ticket_id
+            FROM guardian_journeys
+            ORDER BY created_at
+            """
+        ).fetchall()
+        return [
+            {
+                "journey_id": row["journey_id"],
+                "corridor_id": row["corridor_id"],
+                "origin_waypoint_id": row["origin_waypoint_id"],
+                "destination_waypoint_id": row["destination_waypoint_id"],
+                "created_at": float(row["created_at"]),
+                "ticket_id": row["ticket_id"],
+            }
+            for row in rows
+        ]
+
+    def save_link(self, link: dict) -> None:
+        self.connect()
+        self._conn.execute(  # type: ignore[attr-defined]
+            """
+            INSERT INTO guardian_links
+                (token, journey_id, created_at, revoked, label, display_name)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(token) DO UPDATE SET
+                revoked = excluded.revoked,
+                label = excluded.label,
+                display_name = excluded.display_name
+            """,
+            (
+                link["token"],
+                link["journey_id"],
+                link["created_at"],
+                1 if link["revoked"] else 0,
+                link.get("label") or "family",
+                link.get("display_name") or "",
+            ),
+        )
+        self._conn.commit()  # type: ignore[attr-defined]
+
+    def load_link(self, token: str) -> dict | None:
+        self.connect()
+        row = self._conn.execute(  # type: ignore[attr-defined]
+            """
+            SELECT token, journey_id, created_at, revoked, label, display_name
+            FROM guardian_links WHERE token = ?
+            """,
+            (token,),
+        ).fetchone()
+        return self._link_row_to_dict(row) if row else None
+
+    def load_links_for_journey(self, journey_id: str) -> list[dict]:
+        self.connect()
+        rows = self._conn.execute(  # type: ignore[attr-defined]
+            """
+            SELECT token, journey_id, created_at, revoked, label, display_name
+            FROM guardian_links WHERE journey_id = ?
+            """,
+            (journey_id,),
+        ).fetchall()
+        return [self._link_row_to_dict(row) for row in rows]
+
+    def load_all_links(self) -> list[dict]:
+        """Every guardian link ever issued, revoked ones included, so a
+        restart can rebuild the registry without resurrecting a cancellation."""
+        self.connect()
+        rows = self._conn.execute(  # type: ignore[attr-defined]
+            """
+            SELECT token, journey_id, created_at, revoked, label, display_name
+            FROM guardian_links ORDER BY created_at
+            """
+        ).fetchall()
+        return [self._link_row_to_dict(row) for row in rows]
+
+    def revoke_link(self, token: str) -> bool:
+        """
+        Revoke a link in the database.
+
+        This is the durability guarantee that matters: a revoke is written
+        immediately rather than held in memory until something happens to
+        flush, so a restart cannot resurrect a link the rider has cancelled.
+        """
+        self.connect()
+        cursor = self._conn.execute(  # type: ignore[attr-defined]
+            "UPDATE guardian_links SET revoked = 1 WHERE token = ?", (token,)
+        )
+        self._conn.commit()  # type: ignore[attr-defined]
+        return cursor.rowcount > 0
+
+    @staticmethod
+    def _link_row_to_dict(row) -> dict:
+        return {
+            "token": row["token"],
+            "journey_id": row["journey_id"],
+            "created_at": float(row["created_at"]),
+            "revoked": bool(row["revoked"]),
+            "label": row["label"],
+            "display_name": row["display_name"],
+        }
 
 
 # Single shared instance for the running process.
