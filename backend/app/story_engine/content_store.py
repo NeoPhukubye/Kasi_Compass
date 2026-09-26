@@ -226,6 +226,39 @@ WAYPOINT_POIS: dict[str, list[PointOfInterest]] = {
             "Secure parking for commuters and shoppers.",
         ),
     ],
+    "bloemfontein": [
+        PointOfInterest(
+            "National Women's Monument",
+            "heritage_site",
+            -29.0852,
+            26.1596,
+            "A moving memorial to the victims of the Anglo-Boer War concentration camps.",
+        ),
+        PointOfInterest(
+            "Naval Hill",
+            "tourist_attraction",
+            -29.0830,
+            26.1620,
+            "A hill and small game reserve with panoramic views of Bloemfontein.",
+        ),
+        PointOfInterest(
+            "Bloemfontein Market",
+            "market",
+            -29.0840,
+            26.1580,
+            "A vibrant market with fresh produce, crafts, and local cuisine.",
+        ),
+        PointOfInterest(
+            "Free State Museum",
+            "tourist_attraction",
+            -29.0860,
+            26.1570,
+            "A museum showcasing the natural and cultural history of the Free State.",
+        ),
+        PointOfInterest(
+            "Station Fuel", "fuel", -29.0870, 26.1560, "Fuel and convenience store near the station."
+        ),
+    ],
     "de_aar": [
         PointOfInterest(
             "De Aar Mall",
@@ -439,6 +472,34 @@ SHOSHOLOZA_ROUTE_STORIES: dict[str, dict] = {
             }
         ],
     },
+    "bloemfontein": {
+        "stop_name": "Bloemfontein Station",
+        "historical_narrative": (
+            "The judicial capital of South Africa and the heart of the Free State. Bloemfontein "
+            "Station has long been the corridor's midpoint — the place where the vast open plains "
+            "of the Free State give way to the Karoo beyond, and where the National Women's Monument "
+            "and Anglo-Boer War memorials tell the story of a province at the centre of the country's history."
+        ),
+        "heritage_sites": [
+            {
+                "name": "National Women's Monument",
+                "era": "Late 19th Century",
+                "description": "A memorial to the 26,000 Boer women and children who died in British concentration camps during the Anglo-Boer War.",
+            },
+            {
+                "name": "Naval Hill",
+                "era": "Natural Landmark",
+                "description": "A hill and small game reserve offering panoramic views of Bloemfontein and the surrounding Free State.",
+            },
+        ],
+        "local_stalls": [
+            {
+                "name": "Station Precinct Vendors",
+                "category": "Food & Goods",
+                "description": "Local traders serving pap, mogodu, and Free State produce to passengers on the long run south.",
+            }
+        ],
+    },
     "kimberley": {
         "stop_name": "Kimberley Station",
         "historical_narrative": (
@@ -605,15 +666,23 @@ STOP_COORDINATES.update(
         "germiston": (-26.2184, 28.1509),
         # Klerksdorp Station, North West
         "klerksdorp": (-26.8677, 26.6667),
+        # Bloemfontein Station, Free State
+        "bloemfontein": (-29.0852, 26.1596),
     }
 )
 
 # Decade-by-decade evolution narratives for the Time Machine feature.
 # Each stop has eras: 1970, 1990, 2023 (present day).
-TIMELINE_EVOLUTION: dict[str, dict[str, str]] = {    "pretoria": {
+TIMELINE_EVOLUTION: dict[str, dict[str, str]] = {
+    "pretoria": {
         "1970": "Pretoria Station in the 1970s thrummed with steam-era locomotives and the clatter of goods trains feeding the capital's industrial heart. The iconic Herbert Baker building presided over platforms busy with migrant workers and civil servants, while jacarandas bloomed purple along the approach roads each spring.",
         "1990": "By the 1990s, diesel-electric traction dominated the Pretoria lines. The station forecourt saw a surge of informal traders selling vetkoek and newspapers to commuters navigating the transition era. The Capital Park workshops still echoed with the rhythm of heavy maintenance, though their workforce was shifting.",
         "2023": "Today, Pretoria Station blends its grand sandstone heritage with modern Gautrain connections and a vibrant vendor precinct. The jacarandas still rain purple petals onto platforms where tourists and daily commuters mingle, and the Union Buildings glow on the hill above a city in constant motion.",
+    },
+    "bloemfontein": {
+        "1970": "Bloemfontein Station in the 1970s was the Free State's rail heart — a junction where steam locomotives from the Cape, the Transvaal, and Natal met. The station's red-brick buildings stood at the midpoint of the country, where the vast grasslands of the Free State stretched in every direction.",
+        "1990": "By the 1990s, diesel-electrics had replaced steam on the mainline through Bloemfontein. The station remained the province's busiest, but the surrounding precinct began to change as informal trading took root around the platforms, serving passengers on the long run between Johannesburg and the Cape.",
+        "2023": "Today, Bloemfontein Station is a modern Free State transport hub where Shosholoza Meyl long-distance trains still pause. The station precinct has been revitalised, and the city's rose-growing heritage — and its role as the country's judicial capital — give the stop a character all its own.",
     },
     "johannesburg_park": {
         "1970": "Park Station in the 1970s was a colossal steam-and-smoke cathedral, the gateway for millions of migrant workers arriving from across Southern Africa. The air smelled of coal, braai smoke from platform vendors, and the urgent rhythm of a city built on gold. Platform canopies sheltered crowds carrying cardboard suitcases and dreams.",
@@ -814,7 +883,7 @@ STATION_ERA_LAYOUT: dict[str, dict[str, dict]] = {
 # Stops that have narrative eras but no surveyed layout yet. Rather than
 # inventing a platform count for them, the Time Machine shows the era
 # narrative alone and says the layout is not recorded.
-STATIONS_WITHOUT_LAYOUT: tuple[str, ...] = ("germiston", "klerksdorp")
+STATIONS_WITHOUT_LAYOUT: tuple[str, ...] = ("germiston", "klerksdorp", "bloemfontein")
 
 
 def get_era_details(stop_key: str) -> dict:
