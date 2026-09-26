@@ -137,18 +137,22 @@ Per organizer guidance to build to **TRL 4** ahead of the hackathon weekend, thi
 - **End-to-end integration tests** (`backend/tests/test_integration.py`) that exercise this actual running app via `TestClient` -- real HTTP requests in, real JSON responses out -- including a test that confirms every returned story carries a human reviewer, not an AI attribution.
 - **Rider memories over HTTP** (`POST`/`GET /journey/memories`, `GET /journey/memories/nearby`) — new memories created by riders at a stop and relived by later travellers, geofence-unlockable at the exact spot they were left; validated end-to-end (unknown waypoint, blank text, malformed rider id, bad coordinates all 422).
 - **Stop discovery + live-telemetry geofence** (`GET /story-engine/stop/{id}`, `GET /story-engine/geofence/verify`, CLI in `backend/tools/stop_lookup.py`) — the Shosholoza corridor's narrative, heritage sites, stalls, and coordinates for every stop, plus proximity verification for a rider approaching a stop (default 100m radius) and the route-aware **Companion Mode Route Guide** (`POST /story-engine/ask`) that answers rider questions from the human-reviewed corpus (Gemini-rephrased only where a server-side key is set).
+- **Ticket validation** (`app/story_engine/tickets.py`, `POST /tickets`, `/tickets/validate`, `/tickets/board`, `/tickets/void`) — the model behind "bound to ticket validation databases". No personal data and no payment processing. Transitions are one-way, so a photo of a used or cancelled ticket is worth nothing; boarding binds a ticket to a journey, which is what makes that journey's identity durable independently of any device.
 - **Guardrail tests for the AI-assisted translation path** (`backend/tests/test_translation_tool.py`) — verifies the running API imports no AI SDK, that drafts can't be applied without human review, and that AI-looking reviewer names are rejected.
 - **Spatial layer with a real database contract** (`app/story_engine/spatial.py`) — corridor centreline materialised as a `geography LineString` with a GiST index, journey telemetry in a queryable table, and along-track position resolution via `ST_ClosestPoint`/`ST_LineLocatePoint` on PostGIS. Served through an identical SQLite contract so it runs with zero infrastructure, and `GET /health` reports which driver is live.
 - **Automated ETA and provincial milestones** (`app/story_engine/eta.py`, `GET /guardian/journeys/{id}/eta`) — ETA from *observed* speed, smoothed with an EWMA, compared against the timetable to produce an explicit delay figure. A stopped train or a dark feed returns **no ETA at all** plus a plain-language reason, rather than a confident guess; `speed_source` says whether a number was measured or assumed.
 - **Journey Guardian with corridor-fed position** (`app/story_engine/journey.py`) — a journey's identity lives server-side, created and advanced by position reports from the corridor. The API cannot verify who is reporting, so it is explicit about it: every report carries a `source`, and the family view surfaces the most recent one and never claims a freshness it does not have.
-- **Family tracking links** (`POST /guardian/journeys/{id}/links`, `GET /guardian/track/{token}`, `DELETE /guardian/links/{token}`, page `frontend/track.html`) — a read-only capability token bound to one journey, carrying no name or contact details, revocable immediately. The link is the WhatsApp-shareable artefact: paste it, the family member sees one plain-language sentence, the province, the delay and the milestone list, with no app and no account.
-- **Ticket validation** (`app/story_engine/tickets.py`, `POST /tickets`, `/tickets/validate`, `/tickets/board`, `/tickets/void`) — the model behind "bound to ticket validation databases". No personal data and no payment processing. Transitions are one-way, so a photo of a used or cancelled ticket is worth nothing; boarding binds a ticket to a journey, which is what makes that journey's identity durable independently of any device.
-- **195/195 tests passing** across eleven suites (story engine, content store, route, live share, memories, translation tool, guide, spatial, eta, journey/tickets, guardian API, integration).
+- **Family tracking links** (`POST /guardian/journeys/{id}/links`, `GET /guardian/track/{token}`, `DELETE /guardian/links/{token}`, page `frontend/track.html`) — a read-only capability token bound to one journey, carrying no name or contact details, revocable immediately. The link is the WhatsApp-shareable artefact: paste it, the family member sees one plain-language sentence, the province, the delay and the milestone list, with no app and no account. **Links and journeys are persisted**, so a redeploy cannot invalidate a token somebody has already been sent — and a revocation is written immediately, so a restart cannot resurrect a cancelled link.
+- **Digital journey passport** (`app/story_engine/passport.py`, `GET /guardian/journeys/{id}/passport`) — a stamp per station, computed from the journey's own persisted position history. A client cannot award itself a stamp by claiming it arrived somewhere: a stamp exists only if a corridor report puts the journey within 25km of that station. A feed that began late therefore leaves a visible gap with a specific explanation, rather than a backfilled-looking book of stamps.
+- **QR boarding** (`GET /tickets/{ref}/qr`, `GET /scan/{ref}`) — a scannable code bound to a validated ticket, encoding the booking reference and corridor and nothing else. The scan target returns the same admissible/reason pair as the gate validation endpoint, so a scanner and a conductor cannot disagree. Uses `segno`; degrades to a clear reason rather than taking the API down.
+- **Offline story packs** (`GET /journey/offline-pack`, `frontend/sw.js`, `frontend/js/offline.js`) — one stop's entire story, guide, POIs, era details and nearby memories in a single self-contained response, pre-cached before the train enters the Karoo. The service worker caches **only** packs and only GETs: a stale cache can show an old story, but it can never award a wrong stamp or book a wrong ticket, and the journey API is never cached because a frozen ETA served as live would be worse than no ETA.
+- **Station Time Machine** — a schematic reconstruction of each station's physical layout per era (running lines, platform faces, catenary, traction, signalling), drawn from the corridor's documented history. This **replaces** what used to be there: two `<img>` elements both pointing at `assets/background.jpg`, captioned "Past Era" and "Present". The backend never sent `image_past`/`image_present`, so the panel was showing the same stock photo twice inside a product whose whole argument is that it never shows a rider something it cannot substantiate. Stops with no surveyed layout say so rather than drawing an invented station; genuine archival photography is still pending partner outreach and the UI says that too.
+- **195/195 → 227/227 tests passing** across twelve suites, including guardrails for each of the above.
 
 **Not yet reached (TRL 5+):**
 - No live GPS feed from an actual train -- Companion Mode is validated against known coordinates in this lab environment, not yet tested onboard a moving train.
 - No user testing yet with real riders -- that's the explicit purpose of the Phase 3 closed pilot below.
-- Guardian tokens live in process memory, so a redeploy invalidates links that have already been sent. Journey *positions* are persisted and survive restarts; revocable capability tokens in a database table is the obvious next step once there is a real operator integration.
+- No genuine archival photography for the Time Machine, and no surveyed platform counts for Germiston or Klerksdorp -- both are reported as unrecorded rather than invented.
 - Story content coverage is currently 2 of 8 waypoints (Kimberley, Matjiesfontein) pending partner outreach -- see WBS Phase 1.
 
 ## 6. User Journey Story
@@ -213,6 +217,7 @@ backend/
     eta.py              # Observed-speed ETA, delay, provincial milestones
     journey.py          # Journey Guardian + family tracking links
     tickets.py          # Ticket validation (one-way states, no personal data)
+    passport.py         # Journey passport: stamps derived from position history
     api.py               # Integrated FastAPI service (TRL 4 evidence)
   tools/
     translate_stories.py   # OFFLINE Gemini drafts for human review — not in request path
@@ -226,18 +231,22 @@ backend/
     test_spatial.py           # Corridor geometry, along-track projection, persistence
     test_eta.py               # ETA refusal cases, milestones, staleness
     test_journey.py           # Guardian links + ticket validation invariants
-    test_guardian_api.py      # Spatial/Guardian/ticket endpoints through the app
+    test_guardian_api.py      # Spatial/Guardian/ticket/passport/QR endpoints
+    test_passport_and_extras.py  # Passport stamps, era data, offline pack, QR
   .env.example          # GEMINI_API_KEY, DATABASE_URL and SQLITE_PATH template
   requirements-postgis.txt  # Optional psycopg driver for the PostGIS path
 frontend/
   index.html           # Main app: map, story cards, Guardian panel, Memory Vault
   track.html           # Family tracking page (read-only, link-token in the hash)
+  sw.js                # Offline story-pack service worker (packs and GETs only)
   js/geo.js             # Shared haversine + along-track progress interpolation
   js/map.js             # MapLibre map, route, markers, animation
   js/app.js             # Mode switching, GPS, story cards
   js/api.js             # Backend API client
   js/guardian.js        # Corridor feed, ETA panel, guardian links, Memory Vault
   js/track.js           # Family tracking view
+  js/era-visual.js      # Station Time Machine schematic renderer
+  js/offline.js         # Offline story-pack pre-caching
 planning/
   Kasi_Compass_WBS.xlsx   # Full work breakdown structure with dates/owners
 ```
