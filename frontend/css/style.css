@@ -1451,6 +1451,42 @@ footer {
         align-items: flex-start;
         gap: 0.25rem;
     }
+
+    /* Zulzi mobile overrides — prevent global button min-width from breaking layouts */
+    .zulzi-vendor-card {
+        min-width: 0;
+        flex: 1 1 100%;
+    }
+    .zulzi-grid {
+        grid-template-columns: 1fr;
+    }
+    .zulzi-vendor-card button,
+    .zulzi-menu-item button,
+    .zulzi-cart-line button,
+    .zulzi-qty,
+    .zulzi-add,
+    .zulzi-remove,
+    .zulzi-back,
+    .zulzi-order-actions button {
+        min-width: auto;
+    }
+    .zulzi-qty {
+        width: 40px;
+        height: 40px;
+    }
+    .zulzi-cart-fields {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .zulzi-cart-fields input {
+        flex: 1 1 100%;
+    }
+    .zulzi-order-actions {
+        flex-direction: column;
+    }
+    .zulzi-order-actions button {
+        width: 100%;
+    }
 }
 
 /* Extra-small phones: even more compact but still accessible */
