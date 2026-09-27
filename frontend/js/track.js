@@ -31,6 +31,23 @@ function formatEtaTime(iso) {
     });
 }
 
+function formatTimeRemaining(iso) {
+    if (!iso) return 'Not available';
+    const target = new Date(iso);
+    if (Number.isNaN(target.getTime())) return 'Not available';
+    const now = new Date();
+    const diffMs = target.getTime() - now.getTime();
+    if (diffMs <= 0) return 'Arriving now';
+    const totalSeconds = Math.floor(diffMs / 1000);
+    if (totalSeconds < 60) return 'Less than a minute';
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    if (totalMinutes < 60) return `${totalMinutes} minute${totalMinutes !== 1 ? 's' : ''}`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (minutes === 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+    return `${hours} hour${hours !== 1 ? 's' : ''} ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+}
+
 function renderMilestones(milestones) {
     const list = document.getElementById('track-milestones');
     list.innerHTML = '';
@@ -89,6 +106,7 @@ function renderView(view) {
         ['Moving at', `${eta.observed_speed_kmh} km/h`],
         ['Next stop', eta.eta.next_station || 'Arriving'],
         ['Expected next stop', formatEtaTime(eta.eta.next_station_at)],
+        ['Time until next stop', formatTimeRemaining(eta.eta.next_station_at)],
         ['Expected in Cape Town', formatEtaTime(eta.eta.arrival_at)],
         ['Schedule', eta.delay_display],
     ];
