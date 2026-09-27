@@ -260,7 +260,7 @@ function openTelkomPuzzle(waypointId, onClose = null) {
     `;
 
     header.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="display: flex; align-items; center; gap: 12px;">
             <img src="../assets/telkom.png" alt="Telkom" style="height: 40px; width: auto;">
             <div>
                 <h3 style="margin: 0; color: #1a472a; font-size: 1.3rem;">${stopNames[waypointId]}</h3>
