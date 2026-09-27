@@ -222,6 +222,13 @@ async function copyGuardianLink() {
     }
 }
 
+function shareGuardianLinkWhatsApp() {
+    if (!guardianState.shareUrl) return;
+    const text = encodeURIComponent(`Track my journey on Kasi Compass: ${guardianState.shareUrl}`);
+    const waUrl = `https://wa.me/?text=${text}`;
+    window.open(waUrl, '_blank');
+}
+
 async function stopGuardianFeed() {
     clearInterval(guardianState.pollTimer);
     guardianState.pollTimer = null;
@@ -316,6 +323,7 @@ function initGuardian() {
     document.getElementById('btn-start-feed')?.addEventListener('click', startGuardianFeed);
     document.getElementById('btn-stop-feed')?.addEventListener('click', stopGuardianFeed);
     document.getElementById('btn-copy-link')?.addEventListener('click', copyGuardianLink);
+    document.getElementById('btn-share-whatsapp')?.addEventListener('click', shareGuardianLinkWhatsApp);
 
     const waypointSelect = document.getElementById('memory-waypoint');
     if (waypointSelect) {

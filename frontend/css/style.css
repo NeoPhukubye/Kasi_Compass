@@ -834,6 +834,30 @@ footer {
     user-select: all;
 }
 
+.guardian-link-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.whatsapp-btn {
+    background: #25d366;
+    color: #fff;
+    font-weight: 700;
+}
+
+.whatsapp-btn:hover:not(:disabled) {
+    background: #1ea952;
+}
+
+@media (max-width: 768px) {
+    .guardian-link-actions button {
+        min-width: auto;
+        flex: 1 1 45%;
+    }
+}
+
 /* Milestone timeline: a plain ordered list, with the reached ones marked.
    A vertical rail reads as a journey without needing a charting library. */
 .milestone-list {
