@@ -65,6 +65,24 @@ from app.story_engine.tickets import (
     normalize_reference,
     ticket_store,
 )
+from app.story_engine.alerts import (
+    Alert,
+    AlertCategory,
+    AlertSeverity,
+    ALERT_TEMPLATES,
+    create_alert,
+    create_alert_from_template,
+    delete_alert,
+    expire_alert,
+    get_active_alert_count,
+    get_alert,
+    get_alerts_for_corridor,
+    get_alerts_for_journey,
+    update_alert,
+    create_alert_subscription,
+    deactivate_subscription,
+    get_subscription_by_ticket,
+)
 
 # AI endpoints are imported lazily to keep the core runtime API
 # independent of Google Generative AI SDK (see test_runtime_api_does_not_import_the_ai_tool).
@@ -1441,6 +1459,279 @@ def advance_zulzi_order(order_id: str) -> ZulziOrderResponse:
 
 
 # ---------------------------------------------------------------------
+# Railway Alerts & Service Notifications.
+#
+# Pushes service disruption alerts to users: delays, cancellations,
+# track works, "rail moved", signal failures, etc.
+# ---------------------------------------------------------------------
+
+alerts_router = APIRouter(prefix="/alerts", tags=["Railway Alerts"])
+
+
+class AlertCreateRequest(BaseModel):
+    corridor_id: str = Field(default="pretoria_cape_town")
+    category: AlertCategory
+    severity: AlertSeverity
+    title: str = Field(min_length=1, max_length=120)
+    message: str = Field(min_length=1, max_length=1000)
+    journey_id: str | None = None
+    affected_stations: list[str] = Field(default_factory=list)
+    expires_in_seconds: float | None = Field(default=None, ge=60)
+    metadata: dict = Field(default_factory=dict)
+
+
+class AlertUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    message: str | None = Field(default=None, min_length=1, max_length=1000)
+    severity: AlertSeverity | None = None
+    expires_in_seconds: float | None = Field(default=None, ge=60)
+    metadata: dict | None = None
+
+
+class AlertFromTemplateRequest(BaseModel):
+    template_key: str
+    corridor_id: str = Field(default="pretoria_cape_town")
+    substitutions: dict[str, str] = Field(default_factory=dict)
+    journey_id: str | None = None
+    affected_stations: list[str] = Field(default_factory=list)
+    expires_in_seconds: float | None = Field(default=None, ge=60)
+
+
+class AlertResponse(BaseModel):
+    alert_id: str
+    corridor_id: str
+    category: str
+    severity: str
+    title: str
+    message: str
+    created_at: float
+    updated_at: float
+    expires_at: float | None
+    journey_id: str | None
+    affected_stations: list[str]
+    metadata: dict
+    is_active: bool
+
+
+@alerts_router.post("", response_model=AlertResponse, status_code=201)
+def create_alert_endpoint(payload: AlertCreateRequest) -> AlertResponse:
+    """Create a new railway alert manually."""
+    alert = create_alert(
+        corridor_id=payload.corridor_id,
+        category=payload.category,
+        severity=payload.severity,
+        title=payload.title,
+        message=payload.message,
+        journey_id=payload.journey_id,
+        affected_stations=payload.affected_stations,
+        expires_in_seconds=payload.expires_in_seconds,
+        metadata=payload.metadata,
+    )
+    return AlertResponse(**alert.as_dict())
+
+
+@alerts_router.post("/from-template", response_model=AlertResponse, status_code=201)
+def create_alert_from_template_endpoint(payload: AlertFromTemplateRequest) -> AlertResponse:
+    """Create an alert from a predefined template (e.g., 'rail_moved', 'signal_failure')."""
+    alert = create_alert_from_template(
+        template_key=payload.template_key,
+        corridor_id=payload.corridor_id,
+        substitutions=payload.substitutions,
+        journey_id=payload.journey_id,
+        affected_stations=payload.affected_stations,
+        expires_in_seconds=payload.expires_in_seconds,
+    )
+    if alert is None:
+        raise HTTPException(status_code=422, detail=f"Unknown template: {payload.template_key}. Available: {list(ALERT_TEMPLATES.keys())}")
+    return AlertResponse(**alert.as_dict())
+
+
+@alerts_router.get("", response_model=list[AlertResponse])
+def list_alerts(
+    corridor_id: str = "pretoria_cape_town",
+    journey_id: str | None = None,
+    include_expired: bool = False,
+) -> list[AlertResponse]:
+    """List alerts for a corridor, optionally filtered to a specific journey."""
+    if journey_id:
+        alerts = get_alerts_for_journey(journey_id, corridor_id, include_expired)
+    else:
+        alerts = get_alerts_for_corridor(corridor_id, include_expired)
+    return [AlertResponse(**a.as_dict()) for a in alerts]
+
+
+@alerts_router.get("/count", response_model=dict[str, int])
+def alert_counts(corridor_id: str = "pretoria_cape_town") -> dict[str, int]:
+    """Get count of active alerts by severity for a corridor."""
+    return get_active_alert_count(corridor_id)
+
+
+@alerts_router.get("/templates", response_model=dict[str, dict])
+def list_templates() -> dict[str, dict]:
+    """List available alert templates with their default categories and severities."""
+    return {
+        key: {
+            "category": tmpl["category"].value,
+            "severity": tmpl["severity"].value,
+            "title": tmpl["title"],
+            "message": tmpl["message"],
+        }
+        for key, tmpl in ALERT_TEMPLATES.items()
+    }
+
+
+@alerts_router.get("/{alert_id}", response_model=AlertResponse)
+def get_alert_endpoint(alert_id: str) -> AlertResponse:
+    """Get a specific alert by ID."""
+    alert = get_alert(alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return AlertResponse(**alert.as_dict())
+
+
+@alerts_router.patch("/{alert_id}", response_model=AlertResponse)
+def update_alert_endpoint(alert_id: str, payload: AlertUpdateRequest) -> AlertResponse:
+    """Update an existing alert."""
+    alert = update_alert(
+        alert_id=alert_id,
+        title=payload.title,
+        message=payload.message,
+        severity=payload.severity,
+        expires_in_seconds=payload.expires_in_seconds,
+        metadata=payload.metadata,
+    )
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return AlertResponse(**alert.as_dict())
+
+
+@alerts_router.post("/{alert_id}/expire", response_model=AlertResponse)
+def expire_alert_endpoint(alert_id: str) -> AlertResponse:
+    """Expire an alert immediately."""
+    alert = update_alert(alert_id, expires_in_seconds=0)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return AlertResponse(**alert.as_dict())
+
+
+@alerts_router.delete("/{alert_id}", status_code=204)
+def delete_alert_endpoint(alert_id: str) -> Response:
+    """Permanently delete an alert."""
+    if not delete_alert(alert_id):
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------
+# Passenger Alert Subscriptions (Onboarding / Offboarding)
+#
+# Passengers "add their ticket" by creating a subscription when they board
+# (onboarding), and remove it when they get off (offboarding).
+# ---------------------------------------------------------------------
+
+from app.story_engine.alerts import (
+    AlertSubscription,
+    create_alert_subscription,
+    deactivate_subscription,
+    get_all_active_subscriptions,
+    get_relevant_alerts_for_subscription,
+    get_subscription_by_ticket,
+    mark_subscription_notified,
+)
+
+
+class SubscriptionCreateRequest(BaseModel):
+    """Create an alert subscription for a ticket (onboarding)."""
+    ticket_id: str
+    booking_reference: str
+    corridor_id: str = "pretoria_cape_town"
+    origin_waypoint_id: str
+    destination_waypoint_id: str
+    journey_id: str | None = None
+    notification_preferences: dict = Field(default_factory=lambda: {"push": True, "in_app": True})
+
+
+class SubscriptionResponse(BaseModel):
+    subscription_id: str
+    ticket_id: str
+    booking_reference: str
+    journey_id: str | None
+    corridor_id: str
+    origin_waypoint_id: str
+    destination_waypoint_id: str
+    subscribed_at: float
+    last_notified_at: float | None
+    is_active: bool
+    notification_preferences: dict
+
+
+@alerts_router.post("/subscriptions", response_model=SubscriptionResponse, status_code=201)
+def create_subscription_endpoint(payload: SubscriptionCreateRequest) -> SubscriptionResponse:
+    """Subscribe a passenger's ticket to alerts (onboarding - passenger boards the train)."""
+    sub = create_alert_subscription(
+        ticket_id=payload.ticket_id,
+        booking_reference=payload.booking_reference,
+        corridor_id=payload.corridor_id,
+        origin_waypoint_id=payload.origin_waypoint_id,
+        destination_waypoint_id=payload.destination_waypoint_id,
+        journey_id=payload.journey_id,
+        notification_preferences=payload.notification_preferences,
+    )
+    return SubscriptionResponse(**sub.as_dict())
+
+
+@alerts_router.get("/subscriptions/ticket/{ticket_id}", response_model=SubscriptionResponse | None)
+def get_subscription_by_ticket_endpoint(ticket_id: str) -> SubscriptionResponse | None:
+    """Get active subscription for a ticket."""
+    sub = get_subscription_by_ticket(ticket_id)
+    if not sub:
+        return None
+    return SubscriptionResponse(**sub.as_dict())
+
+
+@alerts_router.get("/subscriptions/journey/{journey_id}", response_model=list[SubscriptionResponse])
+def get_subscriptions_by_journey_endpoint(journey_id: str) -> list[SubscriptionResponse]:
+    """Get all active subscriptions for a journey."""
+    subs = get_subscription_by_journey(journey_id)
+    return [SubscriptionResponse(**s.as_dict()) for s in subs]
+
+
+@alerts_router.get("/subscriptions/{subscription_id}/alerts", response_model=list[AlertResponse])
+def get_subscription_alerts_endpoint(
+    subscription_id: str,
+    include_expired: bool = False,
+) -> list[AlertResponse]:
+    """Get alerts relevant to a passenger's subscription."""
+    alerts = get_relevant_alerts_for_subscription(subscription_id, include_expired)
+    return [AlertResponse(**a.as_dict()) for a in alerts]
+
+
+@alerts_router.post("/subscriptions/{subscription_id}/notify", response_model=SubscriptionResponse)
+def mark_subscription_notified_endpoint(subscription_id: str) -> SubscriptionResponse:
+    """Mark that a subscription has been notified (for delivery tracking)."""
+    sub = mark_subscription_notified(subscription_id)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return SubscriptionResponse(**sub.as_dict())
+
+
+@alerts_router.post("/subscriptions/ticket/{ticket_id}/deactivate", response_model=SubscriptionResponse | None)
+def deactivate_subscription_endpoint(ticket_id: str) -> SubscriptionResponse | None:
+    """Deactivate a ticket's alert subscription (offboarding - passenger gets off the train)."""
+    sub = deactivate_subscription(ticket_id)
+    if not sub:
+        return None
+    return SubscriptionResponse(**sub.as_dict())
+
+
+@alerts_router.get("/subscriptions", response_model=list[SubscriptionResponse])
+def list_all_subscriptions_endpoint() -> list[SubscriptionResponse]:
+    """List all active subscriptions (admin/debug)."""
+    subs = get_all_active_subscriptions()
+    return [SubscriptionResponse(**s.as_dict()) for s in subs]
+
+
+# ---------------------------------------------------------------------
 # Story-engine discovery + geofence verification (CLI/frontend surfaces).
 #
 # A separate router so the discovery endpoints don't crowd the /journey
@@ -1532,3 +1823,4 @@ except ImportError:
 
 app.include_router(story_engine_router)
 app.include_router(zulzi_router)
+app.include_router(alerts_router)
