@@ -260,8 +260,8 @@ function openTelkomPuzzle(waypointId, onClose = null) {
     `;
 
     header.innerHTML = `
-        <div style="display: flex; align-items; center; gap: 12px;">
-            <img src="../assets/telkom.png" alt="Telkom" style="height: 40px; width: auto;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <img src="assets/telkom.png" alt="Telkom" style="height: 40px; width: auto;">
             <div>
                 <h3 style="margin: 0; color: #1a472a; font-size: 1.3rem;">${stopNames[waypointId]}</h3>
                 <p style="margin: 4px 0 0; color: #666; font-size: 0.9rem;">Telkom Tower Puzzle</p>
@@ -334,7 +334,7 @@ function openTelkomPuzzle(waypointId, onClose = null) {
 
     const gridContainer = document.createElement('div');
     gridContainer.className = 'puzzle-grid-container';
-    const grid = createPuzzleGrid(puzzleState.size, '../assets/telkom.png');
+    const grid = createPuzzleGrid(puzzleState.size, 'assets/telkom.png');
     gridContainer.appendChild(grid);
 
     const footer = document.createElement('p');
@@ -378,7 +378,7 @@ function rebuildPuzzle() {
     selectedPiece = null;
     updateMoves();
     
-    const grid = createPuzzleGrid(puzzleState.size, '../assets/telkom.png');
+    const grid = createPuzzleGrid(puzzleState.size, 'assets/telkom.png');
     gridContainer.innerHTML = '';
     gridContainer.appendChild(grid);
     startTimer();
