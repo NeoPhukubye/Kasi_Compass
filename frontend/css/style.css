@@ -1206,6 +1206,64 @@ footer {
 }
 
 
+/* ---------------------------------------------------------------------
+   Station Time Machine — schematic era reconstruction.
+
+   Replaces the old past/present image comparison, which rendered the same
+   placeholder photograph in both frames.
+   --------------------------------------------------------------------- */
+
+#era-visual {
+    margin-top: 0.9rem;
+}
+
+.era-schematic {
+    width: 100%;
+    height: auto;
+    max-width: 32rem;
+    display: block;
+    background: var(--bg);
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    padding: 0.4rem;
+}
+
+.era-change {
+    font-size: 1.1rem;
+    color: var(--text);
+    margin: 0.6rem 0 0.4rem;
+    line-height: 1.45;
+}
+
+.era-facts {
+    display: grid;
+    grid-template-columns: minmax(5rem, auto) 1fr;
+    gap: 0.2rem 0.8rem;
+    margin: 0;
+    font-size: 1rem;
+}
+
+.era-facts dt {
+    color: var(--text-light);
+    font-weight: 600;
+}
+
+.era-facts dd {
+    margin: 0;
+    font-weight: 600;
+}
+
+.era-note {
+    font-size: 1rem;
+    color: var(--text-light);
+    font-style: italic;
+    background: var(--bg);
+    border-left: 3px solid var(--accent);
+    padding: 0.6rem 0.8rem;
+    margin: 0.5rem 0 0;
+}
+
+
 .offline-reader {
     margin-top: 1rem;
     padding: 1rem;
@@ -1428,99 +1486,4 @@ footer {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
-}
-
-.stamp-province,
-.stamp-time,
-.stamp-source {
-    font-size: 0.75rem;
-    color: var(--text-light);
-}
-
-.offline-status {
-    font-size: 0.9em;
-    color: var(--text-light);
-    min-height: 1.2em;
-    margin: 0.5rem 0;
-}
-
-.offline-status[data-tone="ok"] {
-    color: var(--primary-light);
-    font-weight: 600;
-}
-
-.offline-status[data-tone="warn"] {
-    color: #a63d1f;
-    font-weight: 600;
-}
-
-.boarding-code {
-    background: var(--white);
-    border: 1px solid var(--shadow);
-    border-radius: var(--radius);
-    padding: 0.75rem;
-    margin: 0.75rem 0;
-    max-width: 15rem;
-}
-
-.boarding-code svg {
-    width: 100%;
-    height: auto;
-    display: block;
-}
-
-.status-dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #ccc;
-    margin: 0.5rem auto;
-}
-
-.status-dot.green { background: #2d6a4f; }
-.status-dot.amber { background: #d4af37; }
-.status-dot.red { background: #a63d1f; }
-
-
-.hero-question {
-    font-size: 1.2rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 1rem;
-    opacity: 0.9;
-}
-
-.hero-choices {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-    justify-content: center;
-}
-
-.hero-choices button {
-    padding: 0.9rem 2rem;
-    border: none;
-    border-radius: 999px;
-    background: var(--accent);
-    color: var(--text);
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-#tracker-input {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-    flex-wrap: wrap;
-    justify-content: center;
-}
-
-#tracker-input input {
-    padding: 0.7rem 1rem;
-    border: none;
-    border-radius: var(--radius);
-    font-size: 0.95rem;
-    width: 260px;
 }
