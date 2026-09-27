@@ -95,8 +95,9 @@ async function fetchAlerts(corridorId = 'pretoria_cape_town', journeyId = null) 
     const params = new URLSearchParams({ corridor_id: corridorId });
     if (journeyId) params.set('journey_id', journeyId);
 
+    const apiBase = window.KASI_API_BASE || window.API_BASE || '';
     try {
-        const response = await fetch(`${window.API_BASE || ''}/alerts?${params.toString()}`);
+        const response = await fetch(`${apiBase}/alerts?${params.toString()}`);
         if (!response.ok) throw new Error(`Failed to fetch alerts: ${response.statusText}`);
         return await response.json();
     } catch (err) {
@@ -106,8 +107,9 @@ async function fetchAlerts(corridorId = 'pretoria_cape_town', journeyId = null) 
 }
 
 async function fetchAlertCounts(corridorId = 'pretoria_cape_town') {
+    const apiBase = window.KASI_API_BASE || window.API_BASE || '';
     try {
-        const response = await fetch(`${window.API_BASE || ''}/alerts/count?corridor_id=${encodeURIComponent(corridorId)}`);
+        const response = await fetch(`${apiBase}/alerts/count?corridor_id=${encodeURIComponent(corridorId)}`);
         if (!response.ok) throw new Error(`Failed to fetch alert counts: ${response.statusText}`);
         return await response.json();
     } catch (err) {
