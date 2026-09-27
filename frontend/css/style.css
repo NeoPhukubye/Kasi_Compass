@@ -182,6 +182,22 @@ nav button:hover:not(.active) {
     background: var(--bg);
 }
 
+nav button#btn-railway-alerts {
+    background: #fff3cd;
+    color: #a63d1f;
+    border-bottom-color: transparent;
+}
+
+nav button#btn-railway-alerts.active {
+    background: #f8d7da;
+    color: #a63d1f;
+    border-bottom-color: #a63d1f;
+}
+
+nav button#btn-railway-alerts:hover:not(.active) {
+    background: #ffeeba;
+}
+
 main {
     flex: 1;
     display: flex;
@@ -1108,6 +1124,133 @@ footer {
     min-height: 56px;
 }
 
+/* Railway Alerts Panel */
+#railway-alerts-panel {
+    background: var(--white);
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 8px var(--shadow);
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+}
+
+#railway-alerts-panel h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: var(--primary);
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+#railway-alerts-panel .panel-note {
+    margin-bottom: 1rem;
+}
+
+#railway-alerts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.railway-alert {
+    border-left: 5px solid;
+    border-radius: 4px;
+    padding: 1rem;
+    background: var(--bg);
+}
+
+.alert-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.alert-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.alert-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.alert-title {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text);
+}
+
+.alert-severity-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    background: var(--primary);
+    color: var(--white);
+}
+
+.alert-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-bottom: 0.5rem;
+}
+
+.alert-category {
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.alert-message {
+    margin: 0;
+    line-height: 1.5;
+    color: var(--text);
+}
+
+.alert-empty {
+    text-align: center;
+    color: var(--text-light);
+    font-style: italic;
+    padding: 2rem;
+}
+
+.alert-count {
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.alert-count.critical {
+    background: #f8d7da;
+    color: #a63d1f;
+}
+
+.alert-count.warning {
+    background: #fff3cd;
+    color: #a63d1f;
+}
+
+.alert-count.info {
+    background: #e8f4ea;
+    color: #1a472a;
+}
+
+.alert-count-none {
+    color: var(--text-light);
+    font-style: italic;
+}
+
 /* Zulzi station-hub commerce */
 #zulzi-panel {
     background: var(--white);
@@ -1838,4 +1981,57 @@ body.high-contrast input {
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
     }
+}
+
+/* ---------------------------------------------------------------------
+   Telkom Tower Puzzle Game
+   --------------------------------------------------------------------- */
+
+@keyframes puzzle-pop-in {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.puzzle-overlay {
+    animation: fade-in 0.2s ease-out;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.puzzle-piece {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.puzzle-piece:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 10;
+}
+
+.puzzle-piece.selected {
+    box-shadow: 0 0 0 3px #d4af37, 0 4px 16px rgba(0,0,0,0.2);
+    transform: scale(1.05);
+}
+
+.puzzle-piece:active {
+    transform: scale(0.98);
+}
+
+.puzzle-diff-btn:hover {
+    background: #1a472a !important;
+    color: white !important;
+}
+
+.puzzle-diff-btn:focus-visible {
+    outline: 3px solid #d4af37;
+    outline-offset: 2px;
 }
