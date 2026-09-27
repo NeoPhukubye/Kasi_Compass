@@ -324,7 +324,14 @@ class SpatialStore:
             origin_waypoint_id      TEXT NOT NULL,
             destination_waypoint_id TEXT NOT NULL,
             created_at              DOUBLE PRECISION NOT NULL,
-            ticket_id               TEXT
+            ticket_id               TEXT,
+            is_minor_journey        BOOLEAN NOT NULL DEFAULT FALSE,
+            minor_name              TEXT NOT NULL DEFAULT '',
+            minor_age               INTEGER NOT NULL DEFAULT 0,
+            guardian_contact_phone  TEXT NOT NULL DEFAULT '',
+            pickup_contacts         JSONB NOT NULL DEFAULT '[]'::jsonb,
+            arrival_handshake_completed BOOLEAN NOT NULL DEFAULT FALSE,
+            handshake_completed_at  DOUBLE PRECISION
         );
         """,
         """
@@ -384,7 +391,14 @@ class SpatialStore:
             origin_waypoint_id    TEXT NOT NULL,
             destination_waypoint_id TEXT NOT NULL,
             created_at            DOUBLE PRECISION NOT NULL,
-            ticket_id             TEXT
+            ticket_id             TEXT,
+            is_minor_journey      INTEGER NOT NULL DEFAULT 0,
+            minor_name            TEXT NOT NULL DEFAULT '',
+            minor_age             INTEGER NOT NULL DEFAULT 0,
+            guardian_contact_phone TEXT NOT NULL DEFAULT '',
+            pickup_contacts       TEXT NOT NULL DEFAULT '[]',
+            arrival_handshake_completed INTEGER NOT NULL DEFAULT 0,
+            handshake_completed_at REAL
         );
         """,
         """
@@ -828,27 +842,87 @@ class SpatialStore:
         """Upsert a journey's own record. Journey *positions* live in
         journey_telemetry; this is the identity that links them together."""
         self.connect()
-        self._conn.execute(  # type: ignore[attr-defined]
-            """
-            INSERT INTO guardian_journeys
-                (journey_id, corridor_id, origin_waypoint_id,
-                 destination_waypoint_id, created_at, ticket_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(journey_id) DO UPDATE SET
-                corridor_id = excluded.corridor_id,
-                origin_waypoint_id = excluded.origin_waypoint_id,
-                destination_waypoint_id = excluded.destination_waypoint_id,
-                ticket_id = excluded.ticket_id
-            """,
-            (
-                journey["journey_id"],
-                journey["corridor_id"],
-                journey["origin_waypoint_id"],
-                journey["destination_waypoint_id"],
-                journey["created_at"],
-                journey.get("ticket_id"),
-            ),
-        )
+        import json
+        pickup_contacts_json = json.dumps(journey.get("pickup_contacts", []))
+        
+        if self._driver == "postgis":
+            self._conn.execute(  # type: ignore[attr-defined]
+                """
+                INSERT INTO guardian_journeys
+                    (journey_id, corridor_id, origin_waypoint_id,
+                     destination_waypoint_id, created_at, ticket_id,
+                     is_minor_journey, minor_name, minor_age,
+                     guardian_contact_phone, pickup_contacts,
+                     arrival_handshake_completed, handshake_completed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT(journey_id) DO UPDATE SET
+                    corridor_id = excluded.corridor_id,
+                    origin_waypoint_id = excluded.origin_waypoint_id,
+                    destination_waypoint_id = excluded.destination_waypoint_id,
+                    ticket_id = excluded.ticket_id,
+                    is_minor_journey = excluded.is_minor_journey,
+                    minor_name = excluded.minor_name,
+                    minor_age = excluded.minor_age,
+                    guardian_contact_phone = excluded.guardian_contact_phone,
+                    pickup_contacts = excluded.pickup_contacts,
+                    arrival_handshake_completed = excluded.arrival_handshake_completed,
+                    handshake_completed_at = excluded.handshake_completed_at
+                """,
+                (
+                    journey["journey_id"],
+                    journey["corridor_id"],
+                    journey["origin_waypoint_id"],
+                    journey["destination_waypoint_id"],
+                    journey["created_at"],
+                    journey.get("ticket_id"),
+                    journey.get("is_minor_journey", False),
+                    journey.get("minor_name", ""),
+                    journey.get("minor_age", 0),
+                    journey.get("guardian_contact_phone", ""),
+                    pickup_contacts_json,
+                    journey.get("arrival_handshake_completed", False),
+                    journey.get("handshake_completed_at"),
+                ),
+            )
+        else:
+            self._conn.execute(  # type: ignore[attr-defined]
+                """
+                INSERT INTO guardian_journeys
+                    (journey_id, corridor_id, origin_waypoint_id,
+                     destination_waypoint_id, created_at, ticket_id,
+                     is_minor_journey, minor_name, minor_age,
+                     guardian_contact_phone, pickup_contacts,
+                     arrival_handshake_completed, handshake_completed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(journey_id) DO UPDATE SET
+                    corridor_id = excluded.corridor_id,
+                    origin_waypoint_id = excluded.origin_waypoint_id,
+                    destination_waypoint_id = excluded.destination_waypoint_id,
+                    ticket_id = excluded.ticket_id,
+                    is_minor_journey = excluded.is_minor_journey,
+                    minor_name = excluded.minor_name,
+                    minor_age = excluded.minor_age,
+                    guardian_contact_phone = excluded.guardian_contact_phone,
+                    pickup_contacts = excluded.pickup_contacts,
+                    arrival_handshake_completed = excluded.arrival_handshake_completed,
+                    handshake_completed_at = excluded.handshake_completed_at
+                """,
+                (
+                    journey["journey_id"],
+                    journey["corridor_id"],
+                    journey["origin_waypoint_id"],
+                    journey["destination_waypoint_id"],
+                    journey["created_at"],
+                    journey.get("ticket_id"),
+                    int(journey.get("is_minor_journey", False)),
+                    journey.get("minor_name", ""),
+                    journey.get("minor_age", 0),
+                    journey.get("guardian_contact_phone", ""),
+                    pickup_contacts_json,
+                    int(journey.get("arrival_handshake_completed", False)),
+                    journey.get("handshake_completed_at"),
+                ),
+            )
         self._conn.commit()  # type: ignore[attr-defined]
 
     def load_journeys(self) -> list[dict]:
@@ -856,22 +930,45 @@ class SpatialStore:
         rows = self._conn.execute(  # type: ignore[attr-defined]
             """
             SELECT journey_id, corridor_id, origin_waypoint_id,
-                   destination_waypoint_id, created_at, ticket_id
+                   destination_waypoint_id, created_at, ticket_id,
+                   is_minor_journey, minor_name, minor_age,
+                   guardian_contact_phone, pickup_contacts,
+                   arrival_handshake_completed, handshake_completed_at
             FROM guardian_journeys
             ORDER BY created_at
             """
         ).fetchall()
-        return [
-            {
+        import json
+        result = []
+        for row in rows:
+            pickup_contacts = []
+            pc_raw = row["pickup_contacts"]
+            if pc_raw:
+                if isinstance(pc_raw, str):
+                    try:
+                        pickup_contacts = json.loads(pc_raw)
+                    except json.JSONDecodeError:
+                        pickup_contacts = []
+                else:
+                    pickup_contacts = pc_raw
+            
+            journey = {
                 "journey_id": row["journey_id"],
                 "corridor_id": row["corridor_id"],
                 "origin_waypoint_id": row["origin_waypoint_id"],
                 "destination_waypoint_id": row["destination_waypoint_id"],
                 "created_at": float(row["created_at"]),
                 "ticket_id": row["ticket_id"],
+                "is_minor_journey": bool(row["is_minor_journey"]),
+                "minor_name": row["minor_name"] or "",
+                "minor_age": int(row["minor_age"] or 0),
+                "guardian_contact_phone": row["guardian_contact_phone"] or "",
+                "pickup_contacts": pickup_contacts,
+                "arrival_handshake_completed": bool(row["arrival_handshake_completed"]),
+                "handshake_completed_at": float(row["handshake_completed_at"]) if row["handshake_completed_at"] else None,
             }
-            for row in rows
-        ]
+            result.append(journey)
+        return result
 
     def save_link(self, link: dict) -> None:
         self.connect()
