@@ -452,7 +452,6 @@ function switchMode(mode) {
         pauseExplorerJourney();
     }
 }
-}
 
 function toggleRailwayAlertsPanel() {
     const panel = document.getElementById('railway-alerts-panel');
