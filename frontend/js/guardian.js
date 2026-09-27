@@ -573,5 +573,39 @@ async function initMinorGuardian() {
 }
 
 // ---------------------------------------------------------------------
+// Journey Guardian initialization
+// ---------------------------------------------------------------------
+
+function initGuardian() {
+    document.getElementById('btn-start-feed')?.addEventListener('click', startGuardianFeed);
+    document.getElementById('btn-stop-feed')?.addEventListener('click', stopGuardianFeed);
+    document.getElementById('btn-copy-link')?.addEventListener('click', copyGuardianLink);
+    document.getElementById('btn-share-whatsapp')?.addEventListener('click', shareGuardianLinkWhatsApp);
+
+    initMinorGuardian();
+
+    const waypointSelect = document.getElementById('memory-waypoint');
+    if (waypointSelect) {
+        // Populated from the corridor the backend already serves, so the two
+        // can never disagree about which stops exist.
+        fetchRoute()
+            .then((waypoints) => {
+                for (const waypoint of waypoints) {
+                    const option = document.createElement('option');
+                    option.value = waypoint.id;
+                    option.textContent = waypoint.name;
+                    waypointSelect.appendChild(option);
+                }
+                return loadMemories();
+            })
+            .catch((err) => console.error('Failed to populate stops:', err));
+
+        waypointSelect.addEventListener('change', loadMemories);
+    }
+
+    document.getElementById('memory-form')?.addEventListener('submit', saveMemory);
+}
+
+// ---------------------------------------------------------------------
 // Memory Vault — rider memories at the stops along the corridor.
 // ---------------------------------------------------------------------
