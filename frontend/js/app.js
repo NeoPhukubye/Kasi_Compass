@@ -29,6 +29,7 @@ let latestPositionRequest = 0;
 const els = {
     btnExplorer: document.getElementById('btn-explorer'),
     btnCompanion: document.getElementById('btn-companion'),
+    btnMinorGuardian: document.getElementById('btn-minor-guardian'),
     modeSwitcher: document.getElementById('mode-switcher'),
     btnStart: document.getElementById('btn-start-journey'),
     btnPause: document.getElementById('btn-pause-journey'),
@@ -284,6 +285,7 @@ function init() {
 
     els.btnExplorer.addEventListener('click', () => switchMode('explorer'));
     els.btnCompanion.addEventListener('click', () => switchMode('companion'));
+    els.btnMinorGuardian.addEventListener('click', () => switchMode('minor-guardian'));
     els.btnStart.addEventListener('click', startExplorerJourney);
     els.btnPause.addEventListener('click', pauseExplorerJourney);
     document.getElementById('btn-passenger').addEventListener('click', beginJourney);
@@ -291,6 +293,16 @@ function init() {
 document.getElementById('btn-explorer-choice').addEventListener('click', startAsExplorer);
 
 document.getElementById('btn-companion-choice').addEventListener('click', startAsCompanion);
+
+document.getElementById('btn-minor-guardian-choice').addEventListener('click', () => {
+    document.getElementById('hero').style.display = 'none';
+    document.getElementById('language-switcher').classList.remove('hidden');
+    document.getElementById('map-container').style.display = 'block';
+    switchMode('minor-guardian');
+    initMap();
+    loadRoute();
+    document.getElementById('map-container').scrollIntoView({ behavior: 'smooth' });
+});
 
 document.getElementById('btn-tracker').addEventListener('click', () => {
     document.getElementById('tracker-input').classList.remove('hidden');
@@ -370,29 +382,56 @@ function handleKeydown(e) {
 
 function switchMode(mode) {
     currentMode = mode;
-    document.getElementById('journey-progress').classList.remove('hidden');
-    document.getElementById('guardian').classList.remove('hidden');
-    document.getElementById('passport').classList.remove('hidden');
-    document.getElementById('zulzi-panel').classList.remove('hidden');
+    
+    // Hide all mode-specific sections first
+    document.getElementById('journey-progress').classList.add('hidden');
+    document.getElementById('guardian').classList.add('hidden');
+    document.getElementById('passport').classList.add('hidden');
+    document.getElementById('zulzi-panel').classList.add('hidden');
+    document.getElementById('minor-guardian').classList.add('hidden');
+    
+    // Reset all buttons
+    els.btnExplorer.classList.remove('active');
+    els.btnExplorer.setAttribute('aria-pressed', 'false');
+    els.btnCompanion.classList.remove('active');
+    els.btnCompanion.setAttribute('aria-pressed', 'false');
+    els.btnMinorGuardian.classList.remove('active');
+    els.btnMinorGuardian.setAttribute('aria-pressed', 'false');
+    
+    // Hide all controls
+    els.explorerControls.classList.add('hidden');
+    els.companionControls.classList.add('hidden');
+    els.guideChat.classList.add('hidden');
 
     if (mode === 'explorer') {
         els.btnExplorer.classList.add('active');
         els.btnExplorer.setAttribute('aria-pressed', 'true');
-        els.btnCompanion.classList.remove('active');
-        els.btnCompanion.setAttribute('aria-pressed', 'false');
+        document.getElementById('journey-progress').classList.remove('hidden');
+        document.getElementById('guardian').classList.remove('hidden');
+        document.getElementById('passport').classList.remove('hidden');
+        document.getElementById('zulzi-panel').classList.remove('hidden');
         els.explorerControls.classList.remove('hidden');
-        els.companionControls.classList.add('hidden');
-        els.guideChat.classList.add('hidden');
         stopCompanionTracking();
-    } else {
+    } else if (mode === 'companion') {
         els.btnCompanion.classList.add('active');
         els.btnCompanion.setAttribute('aria-pressed', 'true');
-        els.btnExplorer.classList.remove('active');
-        els.btnExplorer.setAttribute('aria-pressed', 'false');
+        document.getElementById('journey-progress').classList.remove('hidden');
+        document.getElementById('guardian').classList.remove('hidden');
+        document.getElementById('passport').classList.remove('hidden');
+        document.getElementById('zulzi-panel').classList.remove('hidden');
         els.companionControls.classList.remove('hidden');
-        els.explorerControls.classList.add('hidden');
         els.guideChat.classList.remove('hidden');
         initGuideChat();
+        pauseExplorerJourney();
+    } else if (mode === 'minor-guardian') {
+        els.btnMinorGuardian.classList.add('active');
+        els.btnMinorGuardian.setAttribute('aria-pressed', 'true');
+        document.getElementById('minor-guardian').classList.remove('hidden');
+        document.getElementById('journey-progress').classList.remove('hidden');
+        document.getElementById('guardian').classList.remove('hidden');
+        document.getElementById('passport').classList.remove('hidden');
+        document.getElementById('zulzi-panel').classList.remove('hidden');
+        stopCompanionTracking();
         pauseExplorerJourney();
     }
 }

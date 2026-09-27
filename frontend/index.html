@@ -63,6 +63,7 @@
                 <div class="hero-choices">
                     <button id="btn-explorer-choice">🧭 Explorer Mode</button>
                     <button id="btn-companion-choice">👥 Companion Mode</button>
+                    <button id="btn-minor-guardian-choice">👶 Minor Guardian</button>
                 </div>
             </div>
             <div id="tracker-input" class="hidden">
@@ -73,8 +74,9 @@
         
 
         <nav id="mode-switcher" role="navigation" aria-label="Journey mode">
-            <button id="btn-explorer" class="active" aria-pressed="true">Explorer Mode</button>
-            <button id="btn-companion" aria-pressed="false">Companion Mode</button>
+            <button id="btn-explorer" class="active" aria-pressed="true">🧭 Explorer</button>
+            <button id="btn-companion" aria-pressed="false">👥 Companion</button>
+            <button id="btn-minor-guardian" aria-pressed="false">👶 Minor Guardian</button>
         </nav>
 
         <main id="main-content" role="main">
@@ -209,6 +211,113 @@
                     <div class="guardian-link-actions">
                         <button id="btn-copy-link">Copy link</button>
                         <button id="btn-share-whatsapp" class="whatsapp-btn">Share via WhatsApp</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="minor-guardian" role="region" aria-labelledby="minor-guardian-title" class="hidden">
+                <h3 id="minor-guardian-title">Unaccompanied Minor Travel</h3>
+                <p class="panel-note">
+                    Create a tracked journey for a child traveling alone. Link to a guardian's phone for
+                    arrival notifications and secure pickup verification at the destination.
+                </p>
+
+                <div id="minor-guardian-setup" class="hidden">
+                    <h4>Set up minor travel</h4>
+                    <form id="minor-setup-form">
+                        <div class="form-group">
+                            <label for="minor-name">Child's name</label>
+                            <input type="text" id="minor-name" placeholder="e.g. Thabo" required minlength="1" maxlength="80">
+                        </div>
+                        <div class="form-group">
+                            <label for="minor-age">Child's age</label>
+                            <input type="number" id="minor-age" placeholder="e.g. 10" min="0" max="17" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="guardian-phone">Guardian phone (for SMS/WhatsApp alerts)</label>
+                            <input type="tel" id="guardian-phone" placeholder="+27 XX XXX XXXX" maxlength="30">
+                        </div>
+                        <div class="form-group">
+                            <label for="minor-ticket-ref">Booking reference (optional)</label>
+                            <input type="text" id="minor-ticket-ref" placeholder="e.g. AB12 CDE" maxlength="8">
+                        </div>
+                        <div class="form-group">
+                            <label for="minor-origin">Departure</label>
+                            <select id="minor-origin">
+                                <option value="pretoria">Pretoria</option>
+                                <option value="johannesburg_park" selected>Johannesburg (Park Station)</option>
+                                <option value="kimberley">Kimberley</option>
+                                <option value="bloemfontein">Bloemfontein</option>
+                                <option value="de_aar">De Aar</option>
+                                <option value="beaufort_west">Beaufort West</option>
+                                <option value="matjiesfontein">Matjiesfontein</option>
+                                <option value="worcester">Worcester</option>
+                                <option value="cape_town">Cape Town</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="minor-destination">Destination</label>
+                            <select id="minor-destination">
+                                <option value="pretoria">Pretoria</option>
+                                <option value="johannesburg_park">Johannesburg (Park Station)</option>
+                                <option value="kimberley">Kimberley</option>
+                                <option value="bloemfontein">Bloemfontein</option>
+                                <option value="de_aar">De Aar</option>
+                                <option value="beaufort_west">Beaufort West</option>
+                                <option value="matjiesfontein">Matjiesfontein</option>
+                                <option value="worcester">Worcester</option>
+                                <option value="cape_town" selected>Cape Town</option>
+                            </select>
+                        </div>
+                        <button type="submit" id="btn-create-minor-journey">Create minor journey</button>
+                    </form>
+                    <p id="minor-setup-status" class="minor-status" aria-live="polite"></p>
+                </div>
+
+                <div id="minor-guardian-active" class="hidden">
+                    <h4>Active minor journey</h4>
+                    <p id="minor-guardian-headline" class="guardian-headline" role="status"></p>
+                    <dl id="minor-guardian-facts" class="guardian-facts"></dl>
+
+                    <h4>Approved pickup contacts</h4>
+                    <p class="panel-note">These adults can collect the child at the destination. Each gets a 6-digit verification code.</p>
+                    <form id="pickup-contact-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="pickup-name">Name</label>
+                                <input type="text" id="pickup-name" placeholder="e.g. Grandmother Ndlovu" required maxlength="80">
+                            </div>
+                            <div class="form-group">
+                                <label for="pickup-phone">Phone</label>
+                                <input type="tel" id="pickup-phone" placeholder="+27 XX XXX XXXX" required maxlength="30">
+                            </div>
+                            <div class="form-group">
+                                <label for="pickup-relation">Relation</label>
+                                <input type="text" id="pickup-relation" placeholder="e.g. Grandmother" required maxlength="40">
+                            </div>
+                        </div>
+                        <button type="submit" id="btn-add-pickup-contact">Add pickup contact</button>
+                    </form>
+                    <p id="pickup-contact-status" class="minor-status" aria-live="polite"></p>
+                    <ul id="pickup-contacts-list" class="minor-contacts-list"></ul>
+
+                    <h4>Arrival handshake</h4>
+                    <p class="panel-note">When the train arrives, the pickup contact provides their 6-digit code to verify safe handoff.</p>
+                    <form id="arrival-handshake-form" class="hidden">
+                        <div class="form-group">
+                            <label for="handshake-contact">Pickup contact</label>
+                            <select id="handshake-contact" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="handshake-code">6-digit verification code</label>
+                            <input type="text" id="handshake-code" placeholder="123456" pattern="\d{6}" required maxlength="6" inputmode="numeric">
+                        </div>
+                        <button type="submit" id="btn-verify-handshake">Verify handshake</button>
+                    </form>
+                    <p id="handshake-status" class="minor-status" aria-live="polite"></p>
+                    <div id="handshake-complete" class="hidden">
+                        <p class="handshake-success">✅ Handoff verified — child safely collected!</p>
+                        <p class="handshake-details"><span id="handshake-contact-name"></span> verified at <span id="handshake-time"></span></p>
                     </div>
                 </div>
             </section>
