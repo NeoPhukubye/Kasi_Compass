@@ -312,37 +312,266 @@ async function saveMemory(event) {
     }
 }
 
-function setMemoryStatus(text, tone = 'info') {
-    const el = document.getElementById('memory-status');
+// ---------------------------------------------------------------------
+// Minor / Guardian travel — unaccompanied minors with arrival handshake.
+// ---------------------------------------------------------------------
+
+async function createMinorJourney(payload) {
+    const response = await fetch(`${API_BASE}/guardian/minor-journeys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `Failed to create minor journey: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+async function addPickupContact(journeyId, payload) {
+    const response = await fetch(`${API_BASE}/guardian/journeys/${encodeURIComponent(journeyId)}/pickup-contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `Failed to add pickup contact: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+async function getPickupContacts(journeyId) {
+    const response = await fetch(`${API_BASE}/guardian/journeys/${encodeURIComponent(journeyId)}/pickup-contacts`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch pickup contacts: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+async function verifyArrivalHandshake(journeyId, payload) {
+    const response = await fetch(`${API_BASE}/guardian/journeys/${encodeURIComponent(journeyId)}/arrival-handshake`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `Failed to verify handshake: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+function setMinorStatus(text, tone = 'info') {
+    const el = document.getElementById('minor-setup-status');
     if (!el) return;
     el.textContent = text;
     el.dataset.tone = tone;
 }
 
-function initGuardian() {
-    document.getElementById('btn-start-feed')?.addEventListener('click', startGuardianFeed);
-    document.getElementById('btn-stop-feed')?.addEventListener('click', stopGuardianFeed);
-    document.getElementById('btn-copy-link')?.addEventListener('click', copyGuardianLink);
-    document.getElementById('btn-share-whatsapp')?.addEventListener('click', shareGuardianLinkWhatsApp);
+function setPickupStatus(text, tone = 'info') {
+    const el = document.getElementById('pickup-contact-status');
+    if (!el) return;
+    el.textContent = text;
+    el.dataset.tone = tone;
+}
 
-    const waypointSelect = document.getElementById('memory-waypoint');
-    if (waypointSelect) {
-        // Populated from the corridor the backend already serves, so the two
-        // can never disagree about which stops exist.
-        fetchRoute()
-            .then((waypoints) => {
-                for (const waypoint of waypoints) {
-                    const option = document.createElement('option');
-                    option.value = waypoint.id;
-                    option.textContent = waypoint.name;
-                    waypointSelect.appendChild(option);
-                }
-                return loadMemories();
-            })
-            .catch((err) => console.error('Failed to populate stops:', err));
+function setHandshakeStatus(text, tone = 'info') {
+    const el = document.getElementById('handshake-status');
+    if (!el) return;
+    el.textContent = text;
+    el.dataset.tone = tone;
+}
 
-        waypointSelect.addEventListener('change', loadMemories);
+function renderMinorJourney(journey) {
+    const setupEl = document.getElementById('minor-guardian-setup');
+    const activeEl = document.getElementById('minor-guardian-active');
+    const headlineEl = document.getElementById('minor-guardian-headline');
+    const factsEl = document.getElementById('minor-guardian-facts');
+    const handshakeFormEl = document.getElementById('arrival-handshake-form');
+    const handshakeCompleteEl = document.getElementById('handshake-complete');
+    const contactSelectEl = document.getElementById('handshake-contact');
+
+    if (!activeEl || !headlineEl || !factsEl) return;
+
+    setupEl.classList.add('hidden');
+    activeEl.classList.remove('hidden');
+
+    // Headline
+    headlineEl.textContent = journey.is_minor_journey
+        ? `Tracking ${journey.minor_name || 'minor'} (${journey.minor_age}y) — ${journey.guardian_contact_phone || 'no guardian phone'}`
+        : 'Minor journey not configured';
+
+    // Facts
+    factsEl.innerHTML = '';
+    const rows = [
+        ['Minor', journey.minor_name || '—'],
+        ['Age', journey.minor_age ? `${journey.minor_age}` : '—'],
+        ['Guardian phone', journey.guardian_contact_phone || '—'],
+        ['Destination', journey.destination_waypoint_id || '—'],
+        ['Pickup contacts', journey.pickup_contacts?.length || 0],
+        ['Handshake complete', journey.arrival_handshake_completed ? 'Yes' : 'No'],
+    ];
+    for (const [label, value] of rows) {
+        const dt = document.createElement('dt');
+        dt.textContent = label;
+        const dd = document.createElement('dd');
+        dd.textContent = value;
+        factsEl.append(dt, dd);
     }
 
-    document.getElementById('memory-form')?.addEventListener('submit', saveMemory);
+    // Render pickup contacts
+    renderPickupContacts(journey);
+
+    // Arrival handshake UI
+    if (journey.arrival_handshake_completed) {
+        handshakeFormEl.classList.add('hidden');
+        handshakeCompleteEl.classList.remove('hidden');
+        document.getElementById('handshake-contact-name').textContent = journey.pickup_contacts?.find(pc => pc.verified_at)?.name || 'Contact';
+        document.getElementById('handshake-time').textContent = journey.handshake_completed_at
+            ? new Date(journey.handshake_completed_at * 1000).toLocaleString()
+            : '—';
+    } else if (journey.pickup_contacts?.length > 0) {
+        handshakeFormEl.classList.remove('hidden');
+        handshakeCompleteEl.classList.add('hidden');
+        // Populate contact select
+        if (contactSelectEl) {
+            contactSelectEl.innerHTML = '<option value="">Select contact…</option>';
+            for (const pc of journey.pickup_contacts) {
+                const opt = document.createElement('option');
+                opt.value = pc.contact_id;
+                opt.textContent = `${pc.name} (${pc.relation})`;
+                contactSelectEl.appendChild(opt);
+            }
+        }
+    } else {
+        handshakeFormEl.classList.add('hidden');
+        handshakeCompleteEl.classList.add('hidden');
+    }
 }
+
+function renderPickupContacts(journey) {
+    const listEl = document.getElementById('pickup-contacts-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    const contacts = journey.pickup_contacts || [];
+    if (contacts.length === 0) {
+        listEl.innerHTML = '<li class="minor-contact-empty">No pickup contacts added yet.</li>';
+        return;
+    }
+    for (const pc of contacts) {
+        const li = document.createElement('li');
+        li.className = 'minor-contact-item';
+        const verified = pc.verified_at ? '✅ Verified' : `🔐 Code: ${pc.verification_code || '—'}`;
+        li.innerHTML = `
+            <strong>${pc.name}</strong> — ${pc.relation} — ${pc.phone}
+            <span class="minor-contact-status">${verified}</span>
+        `;
+        listEl.appendChild(li);
+    }
+}
+
+async function initMinorGuardian() {
+    const form = document.getElementById('minor-setup-form');
+    const pickupForm = document.getElementById('pickup-contact-form');
+    const handshakeForm = document.getElementById('arrival-handshake-form');
+
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btn-create-minor-journey');
+            btn.disabled = true;
+            setMinorStatus('Creating minor journey…');
+
+            try {
+                const payload = {
+                    minor_name: document.getElementById('minor-name').value.trim(),
+                    minor_age: parseInt(document.getElementById('minor-age').value, 10),
+                    guardian_contact_phone: document.getElementById('guardian-phone').value.trim(),
+                    ticket_reference: document.getElementById('minor-ticket-ref').value.trim() || undefined,
+                    origin_waypoint_id: document.getElementById('minor-origin').value,
+                    destination_waypoint_id: document.getElementById('minor-destination').value,
+                };
+                const journey = await createMinorJourney(payload);
+                guardianState.journeyId = journey.journey_id;
+                // Also start polling for this journey
+                renderMinorJourney(journey);
+                setMinorStatus('Minor journey created! Add pickup contacts below.', 'ok');
+            } catch (err) {
+                setMinorStatus(err.message, 'warn');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    }
+
+    if (pickupForm) {
+        pickupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!guardianState.journeyId) {
+                setPickupStatus('Create a minor journey first.', 'warn');
+                return;
+            }
+            const btn = document.getElementById('btn-add-pickup-contact');
+            btn.disabled = true;
+            setPickupStatus('Adding pickup contact…');
+
+            try {
+                const contact = await addPickupContact(guardianState.journeyId, {
+                    name: document.getElementById('pickup-name').value.trim(),
+                    phone: document.getElementById('pickup-phone').value.trim(),
+                    relation: document.getElementById('pickup-relation').value.trim(),
+                });
+                setPickupStatus(`Added ${contact.name} — code: ${contact.verification_code}`, 'ok');
+                pickupForm.reset();
+                // Refresh journey to show new contact
+                const journey = await fetchJourneyEta(guardianState.journeyId);
+                renderMinorJourney(journey);
+            } catch (err) {
+                setPickupStatus(err.message, 'warn');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    }
+
+    if (handshakeForm) {
+        handshakeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!guardianState.journeyId) {
+                setHandshakeStatus('No active minor journey.', 'warn');
+                return;
+            }
+            const btn = document.getElementById('btn-verify-handshake');
+            btn.disabled = true;
+            setHandshakeStatus('Verifying handshake…');
+
+            try {
+                const result = await verifyArrivalHandshake(guardianState.journeyId, {
+                    contact_id: document.getElementById('handshake-contact').value,
+                    verification_code: document.getElementById('handshake-code').value.trim(),
+                });
+                if (result.verified) {
+                    setHandshakeStatus('Handshake verified — child safely collected!', 'ok');
+                    handshakeForm.classList.add('hidden');
+                    document.getElementById('handshake-complete').classList.remove('hidden');
+                    handshakeForm.reset();
+                    // Refresh journey
+                    const journey = await fetchJourneyEta(guardianState.journeyId);
+                    renderMinorJourney(journey);
+                } else {
+                    setHandshakeStatus('Invalid code — please check and try again.', 'warn');
+                }
+            } catch (err) {
+                setHandshakeStatus(err.message, 'warn');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    }
+}
+
+// ---------------------------------------------------------------------
+// Memory Vault — rider memories at the stops along the corridor.
+// ---------------------------------------------------------------------
