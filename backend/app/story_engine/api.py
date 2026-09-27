@@ -675,6 +675,147 @@ def simulate_run(payload: SimulateRunRequest) -> SimulateRunResponse:
         eta=JourneyEtaResponse(**journey_registry.eta_for(journey_id)),
     )
 
+
+# ---------------------------------------------------------------------
+# Minor / Guardian travel — unaccompanied minors with arrival handshake.
+# ---------------------------------------------------------------------
+
+class CreateMinorJourneyRequest(BaseModel):
+    """Create a journey for an unaccompanied minor, linked to a guardian's journey."""
+    journey_id: str | None = Field(default=None, pattern=JOURNEY_ID_PATTERN)
+    origin_waypoint_id: str = "pretoria"
+    destination_waypoint_id: str = "cape_town"
+    ticket_reference: str | None = None
+    minor_name: str = Field(min_length=1, max_length=80)
+    minor_age: int = Field(ge=0, le=17)
+    guardian_contact_phone: str = Field(default="", max_length=30)
+
+
+class PickupContactRequest(BaseModel):
+    """Add an approved pickup contact for a minor's journey."""
+    name: str = Field(min_length=1, max_length=80)
+    phone: str = Field(min_length=1, max_length=30)
+    relation: str = Field(min_length=1, max_length=40)
+
+
+class ArrivalHandshakeRequest(BaseModel):
+    """Verify arrival handshake code from a pickup contact."""
+    contact_id: str
+    verification_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class MinorJourneyResponse(BaseModel):
+    journey_id: str
+    corridor_id: str
+    origin_waypoint_id: str
+    destination_waypoint_id: str
+    created_at: float
+    ticket_id: str | None
+    is_minor_journey: bool
+    minor_name: str
+    minor_age: int
+    guardian_contact_phone: str
+    pickup_contacts: list[dict]
+    arrival_handshake_completed: bool
+    handshake_completed_at: float | None
+
+
+@app.post("/guardian/minor-journeys", response_model=MinorJourneyResponse, status_code=201)
+def create_minor_journey(payload: CreateMinorJourneyRequest) -> MinorJourneyResponse:
+    """
+    Create a tracked journey for an unaccompanied minor.
+    
+    The minor's ticket is linked to the guardian's journey so the guardian
+    receives arrival notifications and manages approved pickup contacts.
+    """
+    _resolve_known_waypoint(payload.origin_waypoint_id, "origin_waypoint_id")
+    _resolve_known_waypoint(payload.destination_waypoint_id, "destination_waypoint_id")
+
+    journey_id = payload.journey_id or str(uuid.uuid4())
+    ticket_id = None
+
+    if payload.ticket_reference:
+        if not is_valid_reference(payload.ticket_reference):
+            raise HTTPException(
+                status_code=422,
+                detail=f"ticket_reference must match the operator format (e.g. 'AB12 CDE'), got {payload.ticket_reference!r}",
+            )
+        try:
+            ticket = ticket_store.board(payload.ticket_reference, journey_id=journey_id)
+        except TicketValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        ticket_id = ticket.ticket_id
+
+    journey = journey_registry.create_journey(
+        journey_id=journey_id,
+        origin_waypoint_id=payload.origin_waypoint_id,
+        destination_waypoint_id=payload.destination_waypoint_id,
+        ticket_id=ticket_id,
+        is_minor_journey=True,
+        minor_name=payload.minor_name,
+        minor_age=payload.minor_age,
+        guardian_contact_phone=payload.guardian_contact_phone,
+    )
+
+    # Link the minor's ticket to the guardian journey if we have a ticket
+    if ticket_id and payload.ticket_reference:
+        try:
+            ticket_store.link_minor_to_guardian(
+                reference=payload.ticket_reference,
+                guardian_journey_id=journey_id,
+                minor_name=payload.minor_name,
+                minor_age=payload.minor_age,
+            )
+        except TicketValidationError as exc:
+            # Don't fail the journey creation if linking fails
+            pass
+
+    return MinorJourneyResponse(**journey.as_dict())
+
+
+@app.post("/guardian/journeys/{journey_id}/pickup-contacts", response_model=dict, status_code=201)
+def add_pickup_contact(journey_id: str, payload: PickupContactRequest) -> dict:
+    """Add an approved pickup contact for a minor's journey."""
+    if not is_valid_journey_id(journey_id):
+        raise HTTPException(status_code=422, detail="journey_id must be UUID-shaped")
+    try:
+        contact = journey_registry.add_pickup_contact(
+            journey_id=journey_id,
+            name=payload.name,
+            phone=payload.phone,
+            relation=payload.relation,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # Return without verification code for security
+    return {k: v for k, v in contact.items() if k != "verification_code"}
+
+
+@app.get("/guardian/journeys/{journey_id}/pickup-contacts", response_model=list[dict])
+def get_pickup_contacts(journey_id: str) -> list[dict]:
+    """Get all pickup contacts for a minor's journey (verification codes hidden)."""
+    if not is_valid_journey_id(journey_id):
+        raise HTTPException(status_code=422, detail="journey_id must be UUID-shaped")
+    contacts = journey_registry.get_pickup_contacts(journey_id)
+    return contacts
+
+
+@app.post("/guardian/journeys/{journey_id}/arrival-handshake", response_model=dict)
+def verify_arrival_handshake(journey_id: str, payload: ArrivalHandshakeRequest) -> dict:
+    """Verify the arrival handshake code from a pickup contact at the destination."""
+    if not is_valid_journey_id(journey_id):
+        raise HTTPException(status_code=422, detail="journey_id must be UUID-shaped")
+    try:
+        verified = journey_registry.verify_arrival_handshake(
+            journey_id=journey_id,
+            contact_id=payload.contact_id,
+            verification_code=payload.verification_code,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"verified": verified}
+
+
 # ---------------------------------------------------------------------
 # Ticket validation — the "bound to ticket validation databases" claim.
 # ---------------------------------------------------------------------
