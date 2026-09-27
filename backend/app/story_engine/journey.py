@@ -447,7 +447,7 @@ class JourneyRegistry:
     def eta_for(self, journey_id: str, now: float | None = None) -> dict:
         """ETA + milestones for a journey, or a `no_data` envelope."""
         try:
-            return compute_eta(journey_id, now=now).as_dict()
+            return compute_eta(journey_id, now=now).as_dict(now=now)
         except LookupError:
             return {
                 "journey_id": journey_id,
@@ -455,7 +455,7 @@ class JourneyRegistry:
                 "position": None,
                 "observed_speed_kmh": 0.0,
                 "speed_source": "insufficient",
-                "eta": {"next_station": None, "next_station_at": None, "arrival_station": None, "arrival_at": None},
+                "eta": {"next_station": None, "next_station_at": None, "next_station_in": None, "arrival_station": None, "arrival_at": None, "arrival_in": None},
                 "delay_hours": 0.0,
                 "delay_display": "Waiting for the first corridor report",
                 "province": "",
