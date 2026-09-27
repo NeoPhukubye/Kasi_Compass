@@ -1483,6 +1483,42 @@ body.large-print {
     line-height: 1.7;
 }
 
+@font-face {
+    font-family: 'OpenDyslexic';
+    src: url('https://cdn.jsdelivr.net/gh/antijingo/open-dyslexic@latest/fonts/OpenDyslexic-Regular.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/antijingo/open-dyslexic@latest/fonts/OpenDyslexic-Regular.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'OpenDyslexic';
+    src: url('https://cdn.jsdelivr.net/gh/antijingo/open-dyslexic@latest/fonts/OpenDyslexic-Bold.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/antijingo/open-dyslexic@latest/fonts/OpenDyslexic-Bold.woff') format('woff');
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'OpenDyslexic';
+    src: url('https://cdn.jsdelivr.net/gh/antijingo/open-dyslexic@latest/fonts/OpenDyslexic-Italic.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/antijingo/open-dyslexic@latest/fonts/OpenDyslexic-Italic.woff') format('woff');
+    font-weight: normal;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'OpenDyslexic';
+    src: url('https://cdn.jsdelivr.net/gh/antijingo/open-dyslexic@latest/fonts/OpenDyslexic-BoldItalic.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/antijingo/open-dyslexic@latest/fonts/OpenDyslexic-BoldItalic.woff') format('woff');
+    font-weight: bold;
+    font-style: italic;
+    font-display: swap;
+}
+
 body.dyslexia-font {
     font-family: "OpenDyslexic", "Comic Sans MS", "Arial Rounded MT Bold", Arial, sans-serif;
     letter-spacing: 0.05em;
