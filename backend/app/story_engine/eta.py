@@ -110,6 +110,25 @@ def _humanize_duration(hours: float) -> str:
     return f"{whole_hours}h {minutes:02d}m" if minutes else f"{whole_hours}h"
 
 
+def _humanize_eta(epoch: float | None, now: float) -> str:
+    """'2 minutes', '1 hour 15 minutes', 'Arriving now' — for the family view."""
+    if epoch is None:
+        return 'Not available'
+    diff_seconds = epoch - now
+    if diff_seconds <= 0:
+        return 'Arriving now'
+    total_minutes = int(diff_seconds // 60)
+    if total_minutes < 1:
+        return 'Less than a minute'
+    if total_minutes < 60:
+        return f"{total_minutes} minute{'s' if total_minutes != 1 else ''}"
+    hours = total_minutes // 60
+    minutes = total_minutes % 60
+    if minutes == 0:
+        return f"{hours} hour{'s' if hours != 1 else ''}"
+    return f"{hours} hour{'s' if hours != 1 else ''} {minutes} minute{'s' if minutes != 1 else ''}"
+
+
 @dataclass(frozen=True)
 class Milestone:
     """A province boundary or station crossing worth telling a family about."""
@@ -145,7 +164,8 @@ class EtaResult:
     last_report_source: str | None
     milestones: list[Milestone] = field(default_factory=list)
 
-    def as_dict(self) -> dict:
+    def as_dict(self, now: float | None = None) -> dict:
+        now = now if now is not None else time.time()
         return {
             "journey_id": self.journey_id,
             "status": self.status,
@@ -155,8 +175,10 @@ class EtaResult:
             "eta": {
                 "next_station": self.eta_next_station_name,
                 "next_station_at": _iso(self.eta_next_station_epoch) if self.eta_next_station_epoch else None,
+                "next_station_in": _humanize_eta(self.eta_next_station_epoch, now),
                 "arrival_station": self.eta_arrival_name,
                 "arrival_at": _iso(self.eta_arrival_epoch) if self.eta_arrival_epoch else None,
+                "arrival_in": _humanize_eta(self.eta_arrival_epoch, now),
             },
             "delay_hours": round(self.delay_hours, 2),
             "delay_display": self.delay_display,
@@ -197,6 +219,29 @@ def _next_stop_after(distance_along_km: float) -> tuple[str, float, float] | Non
         if cumulative > distance_along_km:
             return waypoint.name, max(0.0, cumulative - distance_along_km), cumulative
     return None
+
+
+def _waypoint_cumulative_km(waypoint_id: str) -> float | None:
+    """Cumulative km from Pretoria to the given waypoint_id."""
+    cumulative = 0.0
+    for index, waypoint in enumerate(PRETORIA_TO_CAPE_TOWN):
+        if waypoint.id == waypoint_id:
+            return cumulative
+        if index > 0:
+            previous = PRETORIA_TO_CAPE_TOWN[index - 1]
+            cumulative += haversine_km(previous.latitude, previous.longitude, waypoint.latitude, waypoint.longitude)
+    return None
+
+
+def _eta_to_waypoint(distance_along_km: float, speed_kmh: float, waypoint_id: str, now: float) -> float | None:
+    """Compute ETA epoch to a specific waypoint. Returns None if waypoint is behind or unreachable."""
+    target_km = _waypoint_cumulative_km(waypoint_id)
+    if target_km is None or target_km <= distance_along_km:
+        return None
+    remaining_km = target_km - distance_along_km
+    if speed_kmh <= 0:
+        return None
+    return now + (remaining_km / speed_kmh) * 3600.0
 
 
 def _next_province_after(province: str) -> str | None:
