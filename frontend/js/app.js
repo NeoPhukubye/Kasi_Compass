@@ -225,6 +225,7 @@ function init() {
         btnExplorer: document.getElementById('btn-explorer'),
         btnCompanion: document.getElementById('btn-companion'),
         btnMinorGuardian: document.getElementById('btn-minor-guardian'),
+        btnRailwayAlerts: document.getElementById('btn-railway-alerts'),
         modeSwitcher: document.getElementById('mode-switcher'),
         btnStart: document.getElementById('btn-start-journey'),
         btnPause: document.getElementById('btn-pause-journey'),
@@ -287,6 +288,7 @@ function init() {
     els.btnExplorer.addEventListener('click', () => switchMode('explorer'));
     els.btnCompanion.addEventListener('click', () => switchMode('companion'));
     els.btnMinorGuardian.addEventListener('click', () => switchMode('minor-guardian'));
+    els.btnRailwayAlerts.addEventListener('click', toggleRailwayAlertsPanel);
     els.btnStart.addEventListener('click', startExplorerJourney);
     els.btnPause.addEventListener('click', pauseExplorerJourney);
     document.getElementById('btn-passenger').addEventListener('click', beginJourney);
@@ -356,6 +358,20 @@ document.getElementById('btn-track').addEventListener('click', () => {
         initPrasa();
     } catch (err) {
         console.error('PRASA panel failed to initialise:', err);
+    }
+
+    // Railway Alerts — show service disruption notifications
+    try {
+        if (window.RailwayAlerts) {
+            window.RailwayAlerts.init({
+                corridorId: 'pretoria_cape_town',
+                containerId: 'railway-alerts',
+                countsContainerId: 'alert-counts',
+                pollIntervalMs: 60000,
+            });
+        }
+    } catch (err) {
+        console.error('Railway alerts failed to initialise:', err);
     }
 }
 
@@ -434,6 +450,26 @@ function switchMode(mode) {
         document.getElementById('zulzi-panel').classList.remove('hidden');
         stopCompanionTracking();
         pauseExplorerJourney();
+    }
+}
+}
+
+function toggleRailwayAlertsPanel() {
+    const panel = document.getElementById('railway-alerts-panel');
+    const btn = els.btnRailwayAlerts;
+    if (!panel || !btn) return;
+
+    const isHidden = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !isHidden);
+    btn.classList.toggle('active', isHidden);
+    btn.setAttribute('aria-pressed', String(isHidden));
+    
+    if (isHidden && window.RailwayAlerts) {
+        // Refresh alerts when opening
+        window.RailwayAlerts.fetchAlerts('pretoria_cape_town', null)
+            .then(alerts => window.RailwayAlerts.renderAlerts(alerts, 'railway-alerts'));
+        window.RailwayAlerts.fetchAlertCounts('pretoria_cape_town')
+            .then(counts => window.RailwayAlerts.renderAlertCounts(counts, 'alert-counts'));
     }
 }
 
@@ -718,6 +754,15 @@ async function onWaypointClick(waypoint) {
         console.error('Failed to fetch position for waypoint:', err);
     }
     if (waypoint.id) {
+        // Offer Telkom puzzle at Pretoria and Johannesburg Park
+        if (['pretoria', 'johannesburg_park'].includes(waypoint.id)) {
+            if (window.TelkomPuzzle && !window.TelkomPuzzle.isOpen()) {
+                const playPuzzle = confirm(`🎮 Play Telkom Tower Puzzle at ${waypoint.name}?\n\nA fun sliding puzzle using the Telkom logo — works offline, no data needed!`);
+                if (playPuzzle) {
+                    window.TelkomPuzzle.open(waypoint.id);
+                }
+            }
+        }
         await showStopInsights(waypoint.id, waypoint.name, { resumable: false });
     }
 }
