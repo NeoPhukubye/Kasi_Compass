@@ -56,9 +56,13 @@ function createPuzzlePiece(index, totalPieces, size, imgSrc) {
 
 function shuffleArray(array) {
     const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    // Multiple shuffle passes for better mixing
+    const passes = 3;
+    for (let pass = 0; pass < passes; pass++) {
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
     }
     return shuffled;
 }
@@ -165,7 +169,15 @@ function createPuzzleGrid(size, imgSrc) {
     `;
     
     const totalPieces = size.rows * size.cols;
-    const indices = shuffleArray(Array.from({ length: totalPieces }, (_, i) => i));
+    let indices = shuffleArray(Array.from({ length: totalPieces }, (_, i) => i));
+    
+    // Ensure puzzle is not already solved (0 moves needed) or nearly solved
+    // Count how many pieces are already in correct position
+    let correctPositions = indices.filter((correctIndex, displayIndex) => correctIndex === displayIndex).length;
+    while (correctPositions > totalPieces * 0.3) { // No more than 30% in correct place
+        indices = shuffleArray(Array.from({ length: totalPieces }, (_, i) => i));
+        correctPositions = indices.filter((correctIndex, displayIndex) => correctIndex === displayIndex).length;
+    }
     
     puzzleState.pieces = indices.map((correctIndex, displayIndex) => {
         const piece = createPuzzlePiece(displayIndex, totalPieces, size, imgSrc);
