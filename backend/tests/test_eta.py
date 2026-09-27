@@ -210,4 +210,4 @@ def test_eta_serialises_to_a_json_safe_payload(store):
     # The family page renders this directly; a datetime object here would
     # blow up the response with a 500 rather than a useful error.
     assert json.loads(json.dumps(payload))["journey_id"] == "json-1"
-    assert set(payload["eta"]) == {"next_station", "next_station_at", "arrival_station", "arrival_at"}
+    assert set(payload["eta"]) == {"next_station", "next_station_at", "next_station_in", "arrival_station", "arrival_at", "arrival_in"}
