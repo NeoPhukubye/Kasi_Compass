@@ -6,8 +6,10 @@ let lastFocusedElement = null;
 let sharingPosition = false;
 let sharedPositionsInterval = null;
 
-// Large-print mode toggle for elderly users
+// Accessibility settings (persisted in localStorage)
 let largePrintMode = false;
+let dyslexiaFontMode = false;
+let highContrastMode = false;
 
 // Waypoints whose stop-insights were already shown during the current
 // explorer run, so the journey auto-pauses exactly once per stop instead
@@ -30,7 +32,11 @@ const els = {
     modeSwitcher: document.getElementById('mode-switcher'),
     btnStart: document.getElementById('btn-start-journey'),
     btnPause: document.getElementById('btn-pause-journey'),
-    btnLargePrint: document.getElementById('btn-large-print'),
+    btnAccessibility: document.getElementById('btn-accessibility'),
+    accessibilityPanel: document.getElementById('accessibility-panel'),
+    toggleLargePrint: document.getElementById('toggle-large-print'),
+    toggleDyslexiaFont: document.getElementById('toggle-dyslexia-font'),
+    toggleHighContrast: document.getElementById('toggle-high-contrast'),
     speedSlider: document.getElementById('speed-slider'),
     speedValue: document.getElementById('speed-value'),
     btnGps: document.getElementById('btn-gps'),
@@ -190,11 +196,79 @@ function startAsCompanion() {
     document.getElementById('map-container').scrollIntoView({ behavior: 'smooth' });
 }
 
-function toggleLargePrint() {
-    largePrintMode = !largePrintMode;
+function applyAccessibilitySettings() {
     document.body.classList.toggle('large-print', largePrintMode);
-    els.btnLargePrint.textContent = largePrintMode ? 'Aa-' : 'Aa+';
-    els.btnLargePrint.setAttribute('aria-pressed', String(largePrintMode));
+    document.body.classList.toggle('dyslexia-font', dyslexiaFontMode);
+    document.body.classList.toggle('high-contrast', highContrastMode);
+    if (els.toggleLargePrint) els.toggleLargePrint.checked = largePrintMode;
+    if (els.toggleDyslexiaFont) els.toggleDyslexiaFont.checked = dyslexiaFontMode;
+    if (els.toggleHighContrast) els.toggleHighContrast.checked = highContrastMode;
+}
+
+function loadAccessibilitySettings() {
+    try {
+        largePrintMode = localStorage.getItem('kasi-large-print') === 'true';
+        dyslexiaFontMode = localStorage.getItem('kasi-dyslexia-font') === 'true';
+        highContrastMode = localStorage.getItem('kasi-high-contrast') === 'true';
+    } catch (e) {
+        // localStorage not available (private browsing, etc.)
+    }
+    applyAccessibilitySettings();
+}
+
+function saveAccessibilitySettings() {
+    try {
+        localStorage.setItem('kasi-large-print', String(largePrintMode));
+        localStorage.setItem('kasi-dyslexia-font', String(dyslexiaFontMode));
+        localStorage.setItem('kasi-high-contrast', String(highContrastMode));
+    } catch (e) {
+        // localStorage not available
+    }
+}
+
+function initAccessibility() {
+    loadAccessibilitySettings();
+
+    // Accessibility menu dropdown
+    if (els.btnAccessibility && els.accessibilityPanel) {
+        els.btnAccessibility.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const expanded = els.btnAccessibility.getAttribute('aria-expanded') === 'true';
+            els.btnAccessibility.setAttribute('aria-expanded', String(!expanded));
+            els.accessibilityPanel.classList.toggle('hidden', expanded);
+        });
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!els.btnAccessibility.contains(e.target) && !els.accessibilityPanel.contains(e.target)) {
+                els.btnAccessibility.setAttribute('aria-expanded', 'false');
+                els.accessibilityPanel.classList.add('hidden');
+            }
+        });
+
+        // Checkbox handlers
+        if (els.toggleLargePrint) {
+            els.toggleLargePrint.addEventListener('change', () => {
+                largePrintMode = els.toggleLargePrint.checked;
+                saveAccessibilitySettings();
+                applyAccessibilitySettings();
+            });
+        }
+        if (els.toggleDyslexiaFont) {
+            els.toggleDyslexiaFont.addEventListener('change', () => {
+                dyslexiaFontMode = els.toggleDyslexiaFont.checked;
+                saveAccessibilitySettings();
+                applyAccessibilitySettings();
+            });
+        }
+        if (els.toggleHighContrast) {
+            els.toggleHighContrast.addEventListener('change', () => {
+                highContrastMode = els.toggleHighContrast.checked;
+                saveAccessibilitySettings();
+                applyAccessibilitySettings();
+            });
+        }
+    }
 }
 
 function init() {
@@ -205,8 +279,8 @@ function init() {
     document.getElementById('guardian').classList.add('hidden');
     document.getElementById('passport').classList.add('hidden');
     document.getElementById('passenger-modes').classList.add('hidden');
-    // Large-print toggle for elderly users
-    els.btnLargePrint.addEventListener('click', toggleLargePrint);
+
+    initAccessibility();
 
     els.btnExplorer.addEventListener('click', () => switchMode('explorer'));
     els.btnCompanion.addEventListener('click', () => switchMode('companion'));

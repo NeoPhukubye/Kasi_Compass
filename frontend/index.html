@@ -12,13 +12,38 @@
 </head>
 <body>
     <a href="#main-content" class="skip-link">Skip to main content</a>
-    <div class="large-print-toggle">
-        <button id="btn-large-print" aria-label="Toggle large print mode">Aa</button>
-    </div>
     <div id="app">
         <header role="banner">
             <h1>Kasi Compass</h1>
             <p class="tagline">Every stop tells a story.</p>
+            <div class="header-actions">
+                <div class="accessibility-menu" role="menu" aria-label="Accessibility settings">
+                    <button id="btn-accessibility" class="accessibility-trigger" aria-expanded="false" aria-haspopup="true" aria-label="Accessibility settings">
+                        <span aria-hidden="true">⚙</span>
+                        <span class="sr-only">Accessibility</span>
+                    </button>
+                    <div id="accessibility-panel" class="accessibility-panel hidden" role="menu">
+                        <div class="accessibility-option">
+                            <label for="toggle-large-print">
+                                <input type="checkbox" id="toggle-large-print" role="menuitemcheckbox" aria-checked="false">
+                                <span>Large text (elderly-friendly)</span>
+                            </label>
+                        </div>
+                        <div class="accessibility-option">
+                            <label for="toggle-dyslexia-font">
+                                <input type="checkbox" id="toggle-dyslexia-font" role="menuitemcheckbox" aria-checked="false">
+                                <span>Dyslexia-friendly font</span>
+                            </label>
+                        </div>
+                        <div class="accessibility-option">
+                            <label for="toggle-high-contrast">
+                                <input type="checkbox" id="toggle-high-contrast" role="menuitemcheckbox" aria-checked="false">
+                                <span>High contrast</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </header>
         <section id="hero" aria-labelledby="hero-title">
             <p class="hero-label">Pretoria → Cape Town</p>

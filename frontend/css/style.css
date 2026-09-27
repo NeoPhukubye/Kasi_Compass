@@ -1389,32 +1389,140 @@ footer {
 }
 
 /* ---------------------------------------------------------------------
-   Elderly-friendly large-print toggle and responsive layout.
+   Accessibility settings menu — compact, not a huge button.
    --------------------------------------------------------------------- */
 
-.large-print-toggle {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 100;
-    /* Elderly-friendly: large, always-visible toggle */
+.header-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.5rem 0;
 }
 
-.large-print-toggle button {
-    min-width: 120px;
-    min-height: 56px;
-    font-size: 1.1rem;
-    padding: 0.8rem 1rem;
+.accessibility-menu {
+    position: relative;
+}
+
+.accessibility-trigger {
+    width: 44px;
+    height: 44px;
+    border: 2px solid var(--primary);
+    border-radius: var(--radius);
+    background: var(--white);
+    color: var(--primary);
+    font-size: 1.3rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px var(--shadow);
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.accessibility-trigger:hover {
     background: var(--primary);
     color: var(--white);
-    border: none;
-    border-radius: var(--radius);
-    cursor: pointer;
-    box-shadow: 0 2px 8px var(--shadow);
 }
 
-.large-print-toggle button:hover {
-    background: var(--primary-light);
+.accessibility-trigger:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+}
+
+.accessibility-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: var(--white);
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 16px var(--shadow);
+    min-width: 220px;
+    z-index: 200;
+}
+
+.accessibility-panel.hidden {
+    display: none;
+}
+
+.accessibility-option {
+    margin: 0.25rem 0;
+}
+
+.accessibility-option label {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 1rem;
+}
+
+.accessibility-option label:hover {
+    background: var(--bg);
+}
+
+.accessibility-option input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.accessibility-option span {
+    color: var(--text);
+    font-weight: 500;
+}
+
+/* Accessibility mode classes on body */
+body.large-print {
+    font-size: 22px;
+    line-height: 1.7;
+}
+
+body.dyslexia-font {
+    font-family: "OpenDyslexic", "Comic Sans MS", "Arial Rounded MT Bold", Arial, sans-serif;
+    letter-spacing: 0.05em;
+    word-spacing: 0.15em;
+    line-height: 1.6;
+}
+
+body.high-contrast {
+    --primary: #004400;
+    --primary-light: #006600;
+    --accent: #cc6600;
+    --accent-light: #e68a00;
+    --text: #000;
+    --text-light: #333;
+    --bg: #fff;
+    --white: #fff;
+    --shadow: #000;
+    --focus-ring: 3px solid #000;
+}
+
+body.high-contrast * {
+    border-color: currentColor !important;
+}
+
+body.high-contrast button,
+body.high-contrast select,
+body.high-contrast input {
+    border: 2px solid currentColor !important;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* Responsive layout: works on cellphones and laptops */
