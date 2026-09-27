@@ -858,7 +858,155 @@ footer {
     }
 }
 
-/* Milestone timeline: a plain ordered list, with the reached ones marked.
+/* Minor Guardian — unaccompanied minor travel UI */
+#minor-guardian {
+    background: var(--white);
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 8px var(--shadow);
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+}
+
+#minor-guardian h3 {
+    margin-top: 0;
+    color: var(--primary);
+    font-size: 1.5rem;
+}
+
+.minor-status {
+    font-size: 1.1rem;
+    color: var(--text-light);
+    min-height: 1.2em;
+    margin: 0.5rem 0;
+}
+
+.minor-status[data-tone="ok"] {
+    color: var(--primary-light);
+    font-weight: 700;
+}
+
+.minor-status[data-tone="warn"] {
+    color: #a63d1f;
+    font-weight: 700;
+}
+
+.minor-guardian-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.minor-guardian-form .form-group {
+    flex: 1 1 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.minor-guardian-form label {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.minor-guardian-form input,
+.minor-guardian-form select {
+    padding: 0.7rem;
+    border: 2px solid var(--shadow);
+    border-radius: var(--radius);
+    font: inherit;
+    font-size: 1.1rem;
+    min-height: 48px;
+}
+
+.minor-guardian-form button[type="submit"] {
+    background: var(--primary);
+    color: var(--white);
+    font-weight: 700;
+    padding: 0.8rem 1.5rem;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    min-height: 48px;
+    align-self: flex-start;
+}
+
+.minor-guardian-form button[type="submit"]:hover:not(:disabled) {
+    background: var(--primary-light);
+}
+
+.minor-guardian-form button[type="submit"]:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.minor-contacts-list {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0;
+}
+
+.minor-contact-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem;
+    border: 1px solid var(--shadow);
+    border-radius: var(--radius);
+    background: var(--bg);
+    margin-bottom: 0.5rem;
+}
+
+.minor-contact-item strong {
+    color: var(--primary);
+}
+
+.minor-contact-status {
+    font-size: 0.9rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--radius);
+    background: var(--primary-light);
+    color: var(--white);
+    font-weight: 600;
+}
+
+.minor-contact-empty {
+    color: var(--text-light);
+    font-style: italic;
+    padding: 1rem;
+    text-align: center;
+}
+
+.handshake-success {
+    color: var(--primary-light);
+    font-weight: 700;
+    font-size: 1.2rem;
+    margin: 0.5rem 0;
+}
+
+.handshake-details {
+    color: var(--text-light);
+    font-size: 1rem;
+}
+
+.arrival-handshake-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.arrival-handshake-form input[inputmode="numeric"] {
+    letter-spacing: 0.3em;
+    font-family: ui-monospace, monospace;
+    font-size: 1.5rem;
+    text-align: center;
+}
    A vertical rail reads as a journey without needing a charting library. */
 .milestone-list {
     list-style: none;
