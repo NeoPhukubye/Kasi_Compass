@@ -104,6 +104,14 @@ class Journey:
     created_at: float
     ticket_id: str | None = None
     guardian_links: dict[str, GuardianLink] = field(default_factory=dict)
+    # Minor travel support
+    is_minor_journey: bool = False
+    minor_name: str = ""
+    minor_age: int = 0
+    guardian_contact_phone: str = ""
+    pickup_contacts: list[dict] = field(default_factory=list)  # list of {contact_id, name, phone, relation, verified_at}
+    arrival_handshake_completed: bool = False
+    handshake_completed_at: float | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -114,6 +122,13 @@ class Journey:
             "created_at": self.created_at,
             "ticket_id": self.ticket_id,
             "guardian_link_count": sum(1 for link in self.guardian_links.values() if not link.revoked),
+            "is_minor_journey": self.is_minor_journey,
+            "minor_name": self.minor_name,
+            "minor_age": self.minor_age,
+            "guardian_contact_phone": self.guardian_contact_phone,
+            "pickup_contacts": self.pickup_contacts,
+            "arrival_handshake_completed": self.arrival_handshake_completed,
+            "handshake_completed_at": self.handshake_completed_at,
         }
 
 
@@ -190,6 +205,10 @@ class JourneyRegistry:
         destination_waypoint_id: str = "cape_town",
         corridor_id: str = "pretoria_cape_town",
         ticket_id: str | None = None,
+        is_minor_journey: bool = False,
+        minor_name: str = "",
+        minor_age: int = 0,
+        guardian_contact_phone: str = "",
         now: float | None = None,
     ) -> Journey:
         self._hydrate()
@@ -203,6 +222,10 @@ class JourneyRegistry:
             destination_waypoint_id=destination_waypoint_id,
             created_at=now,
             ticket_id=ticket_id,
+            is_minor_journey=is_minor_journey,
+            minor_name=minor_name,
+            minor_age=minor_age,
+            guardian_contact_phone=guardian_contact_phone,
         )
         self._journeys[journey_id] = journey
         spatial.spatial_store.save_journey(journey.as_dict())
@@ -311,6 +334,77 @@ class JourneyRegistry:
         if journey is None:
             return []
         return [link for link in journey.guardian_links.values() if not link.revoked]
+
+    def add_pickup_contact(
+        self,
+        journey_id: str,
+        name: str,
+        phone: str,
+        relation: str,
+        now: float | None = None,
+    ) -> dict:
+        """Add an approved pickup contact for a minor's journey."""
+        self._hydrate()
+        journey = self._journeys.get(journey_id)
+        if journey is None:
+            raise ValueError(f"unknown journey_id: {journey_id!r}")
+        if not journey.is_minor_journey:
+            raise ValueError("Journey is not marked for minor travel")
+        
+        now = now if now is not None else time.time()
+        import secrets
+        verification_code = f"{secrets.randbelow(900000) + 100000:06d}"
+        contact = {
+            "contact_id": secrets.token_urlsafe(8),
+            "name": name.strip()[:80],
+            "phone": phone.strip()[:30],
+            "relation": relation.strip()[:40],
+            "verification_code": verification_code,
+            "verified_at": None,
+        }
+        journey.pickup_contacts.append(contact)
+        spatial.spatial_store.save_journey(journey.as_dict())
+        return contact
+
+    def verify_arrival_handshake(
+        self,
+        journey_id: str,
+        contact_id: str,
+        verification_code: str,
+        now: float | None = None,
+    ) -> bool:
+        """Verify the arrival handshake code from a pickup contact."""
+        self._hydrate()
+        journey = self._journeys.get(journey_id)
+        if journey is None:
+            raise ValueError(f"unknown journey_id: {journey_id!r}")
+        if not journey.is_minor_journey:
+            raise ValueError("Journey is not marked for minor travel")
+        
+        now = now if now is not None else time.time()
+        contact = next((pc for pc in journey.pickup_contacts if pc["contact_id"] == contact_id), None)
+        if contact is None:
+            raise ValueError("Pickup contact not found")
+        
+        if contact["verification_code"] != verification_code:
+            return False
+        
+        contact["verified_at"] = now
+        journey.arrival_handshake_completed = True
+        journey.handshake_completed_at = now
+        spatial.spatial_store.save_journey(journey.as_dict())
+        return True
+
+    def get_pickup_contacts(self, journey_id: str) -> list[dict]:
+        """Get all pickup contacts for a minor's journey (verification codes hidden)."""
+        self._hydrate()
+        journey = self._journeys.get(journey_id)
+        if journey is None:
+            return []
+        return [
+            {k: v for k, v in pc.items() if k != "verification_code"}
+            for pc in journey.pickup_contacts
+        ]
 
     # ------------------------------------------------------------------
     # Position ingestion
