@@ -18,14 +18,40 @@ from __future__ import annotations
 import os
 import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from typing import TypedDict
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.story_engine import spatial
-from app.story_engine.content_store import get_story, get_story_source, get_pois, get_stop_content
+from app.story_engine.alerts import (
+    ALERT_TEMPLATES,
+    AlertCategory,
+    AlertSeverity,
+    create_alert,
+    create_alert_from_template,
+    create_alert_subscription,
+    deactivate_subscription,
+    delete_alert,
+    get_active_alert_count,
+    get_alert,
+    get_alerts_for_corridor,
+    get_alerts_for_journey,
+    get_all_active_subscriptions,
+    get_relevant_alerts_for_subscription,
+    get_subscription_by_journey,
+    get_subscription_by_ticket,
+    mark_subscription_notified,
+    update_alert,
+)
+from app.story_engine.content_store import (
+    get_pois,
+    get_stop_content,
+    get_story,
+    get_story_source,
+)
 from app.story_engine.eta import MAX_SIMULATION_STEPS, simulate_corridor_run
 from app.story_engine.geofence import (
     check_geofence,
@@ -34,7 +60,6 @@ from app.story_engine.geofence import (
     route_progress_fraction,
 )
 from app.story_engine.guide import answer_question
-from app.story_engine.passport import build_passport
 from app.story_engine.journey import (
     GUARDIAN_TOKEN_PATTERN,
     JOURNEY_ID_PATTERN,
@@ -43,20 +68,12 @@ from app.story_engine.journey import (
     journey_registry,
 )
 from app.story_engine.live_share import RIDER_ID_PATTERN, live_position_store
-from app.story_engine.zulzi import (
-    MenuItem,
-    OrderValidationError,
-    STATUS_CANCELLED,
-    Vendor,
-    ZulziOrder,
-    format_order_response,
-    zulzi_store,
-)
 from app.story_engine.memories import (
     DEFAULT_MEMORIES_LIMIT,
     DEFAULT_NEARBY_RADIUS_METERS,
     memory_store,
 )
+from app.story_engine.passport import build_passport
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN, Waypoint
 from app.story_engine.tickets import (
     MAX_TICKET_HOLD_HOURS,
@@ -65,24 +82,51 @@ from app.story_engine.tickets import (
     normalize_reference,
     ticket_store,
 )
-from app.story_engine.alerts import (
-    Alert,
-    AlertCategory,
-    AlertSeverity,
-    ALERT_TEMPLATES,
-    create_alert,
-    create_alert_from_template,
-    delete_alert,
-    expire_alert,
-    get_active_alert_count,
-    get_alert,
-    get_alerts_for_corridor,
-    get_alerts_for_journey,
-    update_alert,
-    create_alert_subscription,
-    deactivate_subscription,
-    get_subscription_by_ticket,
+from app.story_engine.zulzi import (
+    STATUS_CANCELLED,
+    OrderValidationError,
+    format_order_response,
+    zulzi_store,
 )
+
+
+class PointOfInterestDict(TypedDict):
+    name: str
+    type: str
+    lat: float
+    lon: float
+    description: str | None
+
+
+class MemoryDict(TypedDict):
+    memory_id: str
+    waypoint_id: str
+    rider_id: str
+    text: str
+    created_at: float
+    language_code: str
+    lat: float | None
+    lon: float | None
+    audio_url: str | None
+
+
+class OrderLineDict(TypedDict):
+    item_id: str
+    name: str
+    quantity: int
+    unit_price: float
+    total: float
+
+
+class ZulziVendorDict(TypedDict):
+    vendor_id: str
+    waypoint_id: str
+    name: str
+    category: str
+    description: str | None
+    rating: float | None
+    image_url: str | None
+
 
 # AI endpoints are imported lazily to keep the core runtime API
 # independent of Google Generative AI SDK (see test_runtime_api_does_not_import_the_ai_tool).
@@ -131,9 +175,7 @@ UUID_RIDER_ID_PATTERN = RIDER_ID_PATTERN.pattern
 # GitHub Pages URL, so production isn't wide open.
 _cors_raw = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
 _allowed_origins = [
-    origin.strip()
-    for origin in (_cors_raw.split(",") if _cors_raw else ["*"])
-    if origin.strip()
+    origin.strip() for origin in (_cors_raw.split(",") if _cors_raw else ["*"]) if origin.strip()
 ]
 
 app.add_middleware(
@@ -149,6 +191,7 @@ app.add_middleware(
 # idempotent, so a restart against an existing SQLite file re-upserts the same
 # eight stations without duplicating rows.
 
+
 class JourneyPositionResponse(BaseModel):
     triggered: bool
     waypoint_id: str | None = None
@@ -157,6 +200,7 @@ class JourneyPositionResponse(BaseModel):
     route_progress_fraction: float
     story_text: str | None = None
     story_source: str | None = None
+
 
 def _validate_coordinates(lat: float, lon: float) -> None:
     """Reject coordinates that cannot be a real geographic position.
@@ -168,6 +212,7 @@ def _validate_coordinates(lat: float, lon: float) -> None:
         raise HTTPException(status_code=422, detail=f"lat must be between -90 and 90, got {lat}")
     if not -180.0 <= lon <= 180.0:
         raise HTTPException(status_code=422, detail=f"lon must be between -180 and 180, got {lon}")
+
 
 @app.get("/journey/position", response_model=JourneyPositionResponse)
 def journey_position(lat: float, lon: float, language: str = "en") -> JourneyPositionResponse:
@@ -196,6 +241,7 @@ def journey_position(lat: float, lon: float, language: str = "en") -> JourneyPos
         story_source=get_story_source(trigger.waypoint.id),
     )
 
+
 @app.get("/journey/route")
 def journey_route() -> list[dict]:
     """Return the full ordered waypoint list — what the frontend map renders."""
@@ -204,6 +250,7 @@ def journey_route() -> list[dict]:
         for w in PRETORIA_TO_CAPE_TOWN
     ]
 
+
 class PointOfInterestResponse(BaseModel):
     name: str
     type: str
@@ -211,10 +258,21 @@ class PointOfInterestResponse(BaseModel):
     lon: float
     description: str | None = None
 
+
 @app.get("/journey/pois", response_model=list[PointOfInterestResponse])
 def journey_pois(waypoint_id: str) -> list[PointOfInterestResponse]:
     """Return nearby shops, markets, fuel, parking, and tourist sites for a stop."""
-    return [PointOfInterestResponse(**p.as_dict()) for p in get_pois(waypoint_id)]
+    return [
+        PointOfInterestResponse(
+            name=p.name,
+            type=p.type,
+            lat=p.lat,
+            lon=p.lon,
+            description=p.description,
+        )
+        for p in get_pois(waypoint_id)
+    ]
+
 
 class RiderIdQuery(BaseModel):
     # UUID-shaped and nothing more — see live_share.py's module docstring
@@ -226,18 +284,22 @@ class RiderIdQuery(BaseModel):
     # of UUID validation for every rider_id-taking endpoint.
     rider_id: str = Field(pattern=UUID_RIDER_ID_PATTERN)
 
+
 class SharePositionRequest(RiderIdQuery):
     lat: float
     lon: float
 
+
 class SharePositionResponse(BaseModel):
     active_riders: int
+
 
 class SharedRiderPosition(BaseModel):
     rider_id: str
     lat: float
     lon: float
     seconds_ago: float
+
 
 @app.post("/journey/share-position", response_model=SharePositionResponse)
 def share_position(payload: SharePositionRequest) -> SharePositionResponse:
@@ -251,6 +313,7 @@ def share_position(payload: SharePositionRequest) -> SharePositionResponse:
 
     count = live_position_store.share_position(payload.rider_id, payload.lat, payload.lon)
     return SharePositionResponse(active_riders=count)
+
 
 @app.get("/journey/shared-positions", response_model=list[SharedRiderPosition])
 def shared_positions(
@@ -266,6 +329,7 @@ def shared_positions(
     positions = live_position_store.get_other_positions(rider_id)
     return [SharedRiderPosition(**p) for p in positions]
 
+
 @app.post("/journey/share-position/leave", status_code=204)
 def leave_shared_position(payload: SharePositionRequest) -> None:
     """
@@ -277,6 +341,7 @@ def leave_shared_position(payload: SharePositionRequest) -> None:
     ignored.
     """
     live_position_store.leave(payload.rider_id)
+
 
 class CreateMemoryRequest(RiderIdQuery):
     """
@@ -290,12 +355,14 @@ class CreateMemoryRequest(RiderIdQuery):
     lon, always together) so later riders passing that spot can unlock it;
     audio_url is a hosted voice-note link, never raw bytes.
     """
+
     waypoint_id: str
     text: str
     language_code: str = "en"
     lat: float | None = None
     lon: float | None = None
     audio_url: str | None = None
+
 
 class MemoryResponse(BaseModel):
     memory_id: str
@@ -307,6 +374,7 @@ class MemoryResponse(BaseModel):
     lat: float | None = None
     lon: float | None = None
     audio_url: str | None = None
+
 
 @app.post("/journey/memories", response_model=MemoryResponse, status_code=201)
 def create_memory(payload: CreateMemoryRequest) -> MemoryResponse:
@@ -328,7 +396,18 @@ def create_memory(payload: CreateMemoryRequest) -> MemoryResponse:
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return MemoryResponse(**memory.as_dict())
+    return MemoryResponse(
+        memory_id=memory.memory_id,
+        waypoint_id=memory.waypoint_id,
+        rider_id=memory.rider_id,
+        text=memory.text,
+        created_at=memory.created_at,
+        language_code=memory.language_code,
+        lat=memory.lat,
+        lon=memory.lon,
+        audio_url=memory.audio_url,
+    )
+
 
 @app.get("/journey/memories", response_model=list[MemoryResponse])
 def list_memories(
@@ -342,7 +421,21 @@ def list_memories(
     """
     if waypoint_id is not None and waypoint_id not in {w.id for w in PRETORIA_TO_CAPE_TOWN}:
         raise HTTPException(status_code=422, detail=f"unknown waypoint_id: {waypoint_id!r}")
-    return [MemoryResponse(**m.as_dict()) for m in memory_store.memories_for(waypoint_id, limit)]
+    return [
+        MemoryResponse(
+            memory_id=m.memory_id,
+            waypoint_id=m.waypoint_id,
+            rider_id=m.rider_id,
+            text=m.text,
+            created_at=m.created_at,
+            language_code=m.language_code,
+            lat=m.lat,
+            lon=m.lon,
+            audio_url=m.audio_url,
+        )
+        for m in memory_store.memories_for(waypoint_id, limit)
+    ]
+
 
 @app.get("/journey/memories/nearby", response_model=list[MemoryResponse])
 def nearby_memories(
@@ -359,7 +452,21 @@ def nearby_memories(
     the whole town.
     """
     _validate_coordinates(lat, lon)
-    return [MemoryResponse(**m.as_dict()) for m in memory_store.memories_near(lat, lon, radius, limit)]
+    return [
+        MemoryResponse(
+            memory_id=m.memory_id,
+            waypoint_id=m.waypoint_id,
+            rider_id=m.rider_id,
+            text=m.text,
+            created_at=m.created_at,
+            language_code=m.language_code,
+            lat=m.lat,
+            lon=m.lon,
+            audio_url=m.audio_url,
+        )
+        for m in memory_store.memories_near(lat, lon, radius, limit)
+    ]
+
 
 # ---------------------------------------------------------------------
 # Spatial layer — corridor geometry and telemetry.
@@ -369,6 +476,7 @@ def nearby_memories(
 # the demo runs on, so what a judge sees is the real contract rather than a
 # mock.
 # ---------------------------------------------------------------------
+
 
 @app.get("/spatial/corridor")
 def corridor_geometry() -> dict:
@@ -400,10 +508,12 @@ def resolve_position(payload: ResolvePositionRequest) -> dict:
     _validate_coordinates(payload.lat, payload.lon)
     return spatial.spatial_store.resolve_position(payload.lat, payload.lon).as_dict()
 
+
 # ---------------------------------------------------------------------
 # Journey Guardian — server-side journeys, corridor-fed position, and the
 # family tracking link that the pitch's "peace of mind" claim rests on.
 # ---------------------------------------------------------------------
+
 
 class CreateJourneyRequest(BaseModel):
     journey_id: str | None = Field(default=None, pattern=JOURNEY_ID_PATTERN)
@@ -411,6 +521,7 @@ class CreateJourneyRequest(BaseModel):
     destination_waypoint_id: str = "cape_town"
     ticket_reference: str | None = None
     holder_label: str = Field(default="", max_length=80)
+
 
 class JourneyResponse(BaseModel):
     journey_id: str
@@ -421,9 +532,11 @@ class JourneyResponse(BaseModel):
     ticket_id: str | None
     guardian_link_count: int
 
+
 class IssueGuardianLinkRequest(BaseModel):
     display_name: str = Field(default="", max_length=80)
     label: str = Field(default="family", max_length=40)
+
 
 class GuardianLinkResponse(BaseModel):
     token: str
@@ -433,6 +546,7 @@ class GuardianLinkResponse(BaseModel):
     label: str
     display_name: str
     share_url: str
+
 
 class ReportPositionRequest(BaseModel):
     """
@@ -445,12 +559,14 @@ class ReportPositionRequest(BaseModel):
     oversight — so the family view always surfaces the last source, and never
     claims a freshness it does not have.
     """
+
     journey_id: str = Field(pattern=JOURNEY_ID_PATTERN)
     lat: float
     lon: float
     source: str = Field(default="corridor")
     speed_mps: float | None = Field(default=None, ge=0, le=120)
     recorded_at: float | None = None
+
 
 class JourneyEtaResponse(BaseModel):
     journey_id: str
@@ -557,7 +673,9 @@ def report_journey_position(journey_id: str, payload: ReportPositionRequest) -> 
     return JourneyEtaResponse(**result["eta"])
 
 
-@app.post("/guardian/journeys/{journey_id}/links", response_model=GuardianLinkResponse, status_code=201)
+@app.post(
+    "/guardian/journeys/{journey_id}/links", response_model=GuardianLinkResponse, status_code=201
+)
 def issue_guardian_link(journey_id: str, payload: IssueGuardianLinkRequest) -> GuardianLinkResponse:
     """
     Mint a family tracking link: a read-only capability token bound to this
@@ -582,7 +700,9 @@ def issue_guardian_link(journey_id: str, payload: IssueGuardianLinkRequest) -> G
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    share_url = f"{os.environ.get('PUBLIC_FRONTEND_URL', '').rstrip('/')}/track.html#token={link.token}"
+    share_url = (
+        f"{os.environ.get('PUBLIC_FRONTEND_URL', '').rstrip('/')}/track.html#token={link.token}"
+    )
     return GuardianLinkResponse(**link.as_dict(), share_url=share_url)
 
 
@@ -652,6 +772,7 @@ class SimulateRunRequest(BaseModel):
     step_minutes: float = Field(default=30.0, ge=1.0, le=720.0)
     steps: int = Field(default=6, ge=1, le=MAX_SIMULATION_STEPS)
 
+
 class SimulateRunResponse(BaseModel):
     journey_id: str
     points_recorded: int
@@ -698,8 +819,10 @@ def simulate_run(payload: SimulateRunRequest) -> SimulateRunResponse:
 # Minor / Guardian travel — unaccompanied minors with arrival handshake.
 # ---------------------------------------------------------------------
 
+
 class CreateMinorJourneyRequest(BaseModel):
     """Create a journey for an unaccompanied minor, linked to a guardian's journey."""
+
     journey_id: str | None = Field(default=None, pattern=JOURNEY_ID_PATTERN)
     origin_waypoint_id: str = "pretoria"
     destination_waypoint_id: str = "cape_town"
@@ -711,6 +834,7 @@ class CreateMinorJourneyRequest(BaseModel):
 
 class PickupContactRequest(BaseModel):
     """Add an approved pickup contact for a minor's journey."""
+
     name: str = Field(min_length=1, max_length=80)
     phone: str = Field(min_length=1, max_length=30)
     relation: str = Field(min_length=1, max_length=40)
@@ -718,6 +842,7 @@ class PickupContactRequest(BaseModel):
 
 class ArrivalHandshakeRequest(BaseModel):
     """Verify arrival handshake code from a pickup contact."""
+
     contact_id: str
     verification_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
@@ -742,7 +867,7 @@ class MinorJourneyResponse(BaseModel):
 def create_minor_journey(payload: CreateMinorJourneyRequest) -> MinorJourneyResponse:
     """
     Create a tracked journey for an unaccompanied minor.
-    
+
     The minor's ticket is linked to the guardian's journey so the guardian
     receives arrival notifications and manages approved pickup contacts.
     """
@@ -777,16 +902,13 @@ def create_minor_journey(payload: CreateMinorJourneyRequest) -> MinorJourneyResp
 
     # Link the minor's ticket to the guardian journey if we have a ticket
     if ticket_id and payload.ticket_reference:
-        try:
+        with suppress(TicketValidationError):
             ticket_store.link_minor_to_guardian(
                 reference=payload.ticket_reference,
                 guardian_journey_id=journey_id,
                 minor_name=payload.minor_name,
                 minor_age=payload.minor_age,
             )
-        except TicketValidationError as exc:
-            # Don't fail the journey creation if linking fails
-            pass
 
     return MinorJourneyResponse(**journey.as_dict())
 
@@ -838,12 +960,14 @@ def verify_arrival_handshake(journey_id: str, payload: ArrivalHandshakeRequest) 
 # Ticket validation — the "bound to ticket validation databases" claim.
 # ---------------------------------------------------------------------
 
+
 class IssueTicketRequest(BaseModel):
     origin_waypoint_id: str = "pretoria"
     destination_waypoint_id: str = "cape_town"
     holder_label: str = Field(default="", max_length=80)
     booking_reference: str | None = None
     valid_hours: float = Field(default=48.0, ge=0.5, le=MAX_TICKET_HOLD_HOURS)
+
 
 class TicketResponse(BaseModel):
     ticket_id: str
@@ -860,13 +984,16 @@ class TicketResponse(BaseModel):
     journey_id: str | None
     validation_count: int
 
+
 class ValidateTicketRequest(BaseModel):
     booking_reference: str
+
 
 class ValidationResponse(BaseModel):
     admissible: bool
     reason: str
     ticket: TicketResponse
+
 
 class VoidTicketRequest(BaseModel):
     booking_reference: str
@@ -970,14 +1097,19 @@ def health() -> dict:
         "zulzi": {
             "source": "live-api" if zulzi_store.is_live else "mock-catalog",
             "supported_stops": len(zulzi_store.supported_stops()),
-            "active_orders": sum(1 for o in zulzi_store._orders.values()  # noqa: SLF001 - read-only count
-                                 if o.status not in ("delivered_to_carriage", "received", "cancelled")),
+            "active_orders": sum(
+                1
+                for o in zulzi_store._orders.values()
+                if o.status not in ("delivered_to_carriage", "received", "cancelled")
+            ),
         },
     }
+
 
 # ---------------------------------------------------------------------
 # Journey passport — a stamp per stop the journey actually reached.
 # ---------------------------------------------------------------------
+
 
 class PassportStamp(BaseModel):
     waypoint_id: str
@@ -987,6 +1119,7 @@ class PassportStamp(BaseModel):
     distance_meters: float
     source: str
     ordinal: int
+
 
 class PassportResponse(BaseModel):
     journey_id: str
@@ -1022,6 +1155,7 @@ def journey_passport(journey_id: str) -> PassportResponse:
 # bars, so the pack is assembled server-side into a single self-contained
 # response the client can cache whole.
 # ---------------------------------------------------------------------
+
 
 class OfflinePackResponse(BaseModel):
     waypoint_id: str
@@ -1068,9 +1202,7 @@ def _offline_pack_for(waypoint: Waypoint, language: str = "en") -> dict:
         }
 
     nodes = spatial.spatial_store.corridor_nodes()
-    cumulative = next(
-        (n.cumulative_km for n in nodes if n.waypoint_id == waypoint.id), 0.0
-    )
+    cumulative = next((n.cumulative_km for n in nodes if n.waypoint_id == waypoint.id), 0.0)
 
     return {
         "waypoint_id": waypoint.id,
@@ -1086,9 +1218,10 @@ def _offline_pack_for(waypoint: Waypoint, language: str = "en") -> dict:
         "story_source": get_story_source(waypoint.id) or "content_store historical narrative",
         "pois": [p.as_dict() for p in get_pois(waypoint.id)],
         "stop_content": stop_content,
-        "nearby_memories": [m.as_dict() for m in memory_store.memories_near(
-            waypoint.latitude, waypoint.longitude, 5_000, 20
-        )],
+        "nearby_memories": [
+            m.as_dict()
+            for m in memory_store.memories_near(waypoint.latitude, waypoint.longitude, 5_000, 20)
+        ],
         "next_waypoint": (
             {
                 "waypoint_id": upcoming.id,
@@ -1119,6 +1252,7 @@ def offline_pack(waypoint_id: str = "matjiesfontein", language: str = "en") -> O
     if waypoint is None:
         raise HTTPException(status_code=422, detail=f"unknown waypoint_id: {waypoint_id!r}")
     return OfflinePackResponse(**_offline_pack_for(waypoint, language=language))
+
 
 # ---------------------------------------------------------------------
 # QR boarding — a scannable code bound to a validated ticket.
@@ -1242,6 +1376,7 @@ def scan_boarding_code(booking_reference: str) -> ScanResponse:
 # spans the whole app.
 # ---------------------------------------------------------------------
 
+
 class OrderLineItemRequest(BaseModel):
     item_id: str
     quantity: int = Field(ge=1, le=20)
@@ -1320,12 +1455,14 @@ def zulzi_stops() -> list[ZulziStopResponse]:
     for waypoint in PRETORIA_TO_CAPE_TOWN:
         if waypoint.id in zulzi_store.supported_stops():
             vendors = zulzi_store.vendors_at(waypoint.id)
-            result.append(ZulziStopResponse(
-                waypoint_id=waypoint.id,
-                name=waypoint.name,
-                province=waypoint.province,
-                vendor_count=len(vendors),
-            ))
+            result.append(
+                ZulziStopResponse(
+                    waypoint_id=waypoint.id,
+                    name=waypoint.name,
+                    province=waypoint.province,
+                    vendor_count=len(vendors),
+                )
+            )
     return result
 
 
@@ -1335,11 +1472,18 @@ def zulzi_vendors(waypoint_id: str) -> list[ZulziVendorResponse]:
     if waypoint_id not in zulzi_store.supported_stops():
         raise HTTPException(status_code=422, detail=f"unknown corridor stop: {waypoint_id!r}")
     vendors = zulzi_store.vendors_at(waypoint_id)
-    return [ZulziVendorResponse(**{
-        "vendor_id": v.vendor_id, "waypoint_id": v.waypoint_id, "name": v.name,
-        "category": v.category, "description": v.description, "rating": v.rating,
-        "image_url": v.image_url,
-    }) for v in vendors]
+    return [
+        ZulziVendorResponse(
+            vendor_id=v.vendor_id,
+            waypoint_id=v.waypoint_id,
+            name=v.name,
+            category=v.category,
+            description=v.description,
+            rating=v.rating,
+            image_url=v.image_url,
+        )
+        for v in vendors
+    ]
 
 
 @zulzi_router.get("/vendors/{vendor_id}", response_model=ZulziVendorResponse)
@@ -1348,11 +1492,15 @@ def zulzi_vendor_detail(vendor_id: str) -> ZulziVendorResponse:
     vendor = zulzi_store.vendor_detail(vendor_id)
     if vendor is None:
         raise HTTPException(status_code=404, detail=f"unknown vendor: {vendor_id!r}")
-    return ZulziVendorResponse(**{
-        "vendor_id": vendor.vendor_id, "waypoint_id": vendor.waypoint_id, "name": vendor.name,
-        "category": vendor.category, "description": vendor.description, "rating": vendor.rating,
-        "image_url": vendor.image_url,
-    })
+    return ZulziVendorResponse(
+        vendor_id=vendor.vendor_id,
+        waypoint_id=vendor.waypoint_id,
+        name=vendor.name,
+        category=vendor.category,
+        description=vendor.description,
+        rating=vendor.rating,
+        image_url=vendor.image_url,
+    )
 
 
 @zulzi_router.get("/vendors/{vendor_id}/menu", response_model=ZulziMenuResponse)
@@ -1411,7 +1559,22 @@ def zulzi_rider_orders(
 ) -> list[ZulziOrderResponse]:
     """A rider's order history, newest first."""
     orders = zulzi_store.orders_for_rider(rider_id)[:limit]
-    return [ZulziOrderResponse(**format_order_response(o), items=[li.as_dict() for li in o.items]) for o in orders]
+    return [
+        ZulziOrderResponse(
+            **format_order_response(o),
+            items=[
+                OrderLineResponse(
+                    item_id=li.item_id,
+                    name=li.name,
+                    quantity=li.quantity,
+                    unit_price=li.unit_price,
+                    total=li.total,
+                )
+                for li in o.items
+            ],
+        )
+        for o in orders
+    ]
 
 
 @zulzi_router.post("/orders/{order_id}/cancel", response_model=ZulziOrderResponse)
@@ -1542,7 +1705,10 @@ def create_alert_from_template_endpoint(payload: AlertFromTemplateRequest) -> Al
         expires_in_seconds=payload.expires_in_seconds,
     )
     if alert is None:
-        raise HTTPException(status_code=422, detail=f"Unknown template: {payload.template_key}. Available: {list(ALERT_TEMPLATES.keys())}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown template: {payload.template_key}. Available: {list(ALERT_TEMPLATES.keys())}",
+        )
     return AlertResponse(**alert.as_dict())
 
 
@@ -1571,8 +1737,8 @@ def list_templates() -> dict[str, dict]:
     """List available alert templates with their default categories and severities."""
     return {
         key: {
-            "category": tmpl["category"].value,
-            "severity": tmpl["severity"].value,
+            "category": tmpl["category"].value,  # type: ignore[attr-defined]
+            "severity": tmpl["severity"].value,  # type: ignore[attr-defined]
             "title": tmpl["title"],
             "message": tmpl["message"],
         }
@@ -1629,19 +1795,10 @@ def delete_alert_endpoint(alert_id: str) -> Response:
 # (onboarding), and remove it when they get off (offboarding).
 # ---------------------------------------------------------------------
 
-from app.story_engine.alerts import (
-    AlertSubscription,
-    create_alert_subscription,
-    deactivate_subscription,
-    get_all_active_subscriptions,
-    get_relevant_alerts_for_subscription,
-    get_subscription_by_ticket,
-    mark_subscription_notified,
-)
-
 
 class SubscriptionCreateRequest(BaseModel):
     """Create an alert subscription for a ticket (onboarding)."""
+
     ticket_id: str
     booking_reference: str
     corridor_id: str = "pretoria_cape_town"
@@ -1715,7 +1872,9 @@ def mark_subscription_notified_endpoint(subscription_id: str) -> SubscriptionRes
     return SubscriptionResponse(**sub.as_dict())
 
 
-@alerts_router.post("/subscriptions/ticket/{ticket_id}/deactivate", response_model=SubscriptionResponse | None)
+@alerts_router.post(
+    "/subscriptions/ticket/{ticket_id}/deactivate", response_model=SubscriptionResponse | None
+)
 def deactivate_subscription_endpoint(ticket_id: str) -> SubscriptionResponse | None:
     """Deactivate a ticket's alert subscription (offboarding - passenger gets off the train)."""
     sub = deactivate_subscription(ticket_id)
@@ -1742,6 +1901,7 @@ def list_all_subscriptions_endpoint() -> list[SubscriptionResponse]:
 
 story_engine_router = APIRouter(prefix="/story-engine", tags=["Story Engine"])
 
+
 @story_engine_router.get("/stop/{stop_id}")
 def stop_content(stop_id: str) -> dict:
     """Fetch the historical narrative, heritage sites, local stalls, and
@@ -1750,6 +1910,7 @@ def stop_content(stop_id: str) -> dict:
     if not content:
         raise HTTPException(status_code=404, detail="Stop content not found.")
     return {"status": "success", "data": content}
+
 
 @story_engine_router.get("/geofence/verify")
 def verify_geofence(
@@ -1775,8 +1936,10 @@ def verify_geofence(
         },
     }
 
+
 class AskGuideRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
+
 
 class GuideResponse(BaseModel):
     answer: str
@@ -1784,6 +1947,7 @@ class GuideResponse(BaseModel):
     ai_used: bool
     stop_id: str | None = None
     stop_name: str | None = None
+
 
 @story_engine_router.post("/ask", response_model=GuideResponse)
 def ask_guide(payload: AskGuideRequest) -> GuideResponse:
@@ -1817,6 +1981,7 @@ def ask_guide(payload: AskGuideRequest) -> GuideResponse:
 # This avoids triggering test_runtime_api_does_not_import_the_ai_tool.
 try:
     from app.story_engine.ai_endpoints import ai_router
+
     app.include_router(ai_router)
 except ImportError:
     pass
