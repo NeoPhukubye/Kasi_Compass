@@ -48,9 +48,11 @@ MAX_TICKET_HOLD_HOURS = 72.0
 # Minor / Guardian support — for unaccompanied minor travel.
 # ---------------------------------------------------------------------
 
+
 @dataclass
 class PickupContact:
     """An approved adult who can collect a minor at the destination."""
+
     contact_id: str
     name: str
     phone: str
@@ -62,6 +64,7 @@ class PickupContact:
 @dataclass
 class MinorTravelInfo:
     """Information about an unaccompanied minor on a ticket."""
+
     is_minor: bool = False
     guardian_journey_id: str | None = None
     minor_name: str = ""
@@ -94,9 +97,12 @@ def generate_reference() -> str:
     """Mint a reference in the operator's shape, for the demo path."""
     letters = "ABCDEFGHJKLMNPQRSTUVWXYZ"  # no I/O — misread on a phone camera
     digits = "0123456789"
-    return "".join(secrets.choice(letters) for _ in range(2)) + \
-        "".join(secrets.choice(digits) for _ in range(2)) + " " + \
-        "".join(secrets.choice(letters) for _ in range(3))
+    return (
+        "".join(secrets.choice(letters) for _ in range(2))
+        + "".join(secrets.choice(digits) for _ in range(2))
+        + " "
+        + "".join(secrets.choice(letters) for _ in range(3))
+    )
 
 
 @dataclass
@@ -191,7 +197,9 @@ class TicketStore:
         now = now if now is not None else time.time()
         hours = max(0.5, min(valid_hours, MAX_TICKET_HOLD_HOURS))
 
-        reference = normalize_reference(booking_reference) if booking_reference else generate_reference()
+        reference = (
+            normalize_reference(booking_reference) if booking_reference else generate_reference()
+        )
         if not is_valid_reference(reference):
             raise TicketValidationError(
                 f"booking_reference must match the operator format (e.g. 'AB12 CDE'), got {reference!r}"
@@ -230,7 +238,9 @@ class TicketStore:
         now = now if now is not None else time.time()
         ticket = self.get_by_reference(reference)
         if ticket is None:
-            raise TicketValidationError(f"unknown booking reference: {normalize_reference(reference)}")
+            raise TicketValidationError(
+                f"unknown booking reference: {normalize_reference(reference)}"
+            )
 
         reason = ""
         if ticket.status == "void":
@@ -246,7 +256,9 @@ class TicketStore:
             "ticket": ticket.as_dict(),
         }
 
-    def board(self, reference: str, journey_id: str | None = None, now: float | None = None) -> Ticket:
+    def board(
+        self, reference: str, journey_id: str | None = None, now: float | None = None
+    ) -> Ticket:
         """
         Consume a ticket at boarding, binding it to a journey.
 
@@ -263,9 +275,7 @@ class TicketStore:
         assert ticket is not None  # validate() already proved it exists
         ticket.status = "boarded"
         ticket.journey_id = journey_id
-        ticket.validations.append(
-            {"action": "boarded", "at": now, "journey_id": journey_id}
-        )
+        ticket.validations.append({"action": "boarded", "at": now, "journey_id": journey_id})
         return ticket
 
     def complete(self, reference: str, now: float | None = None) -> Ticket:
@@ -273,11 +283,15 @@ class TicketStore:
         now = now if now is not None else time.time()
         ticket = self.get_by_reference(reference)
         if ticket is None:
-            raise TicketValidationError(f"unknown booking reference: {normalize_reference(reference)}")
+            raise TicketValidationError(
+                f"unknown booking reference: {normalize_reference(reference)}"
+            )
         if ticket.status == "void":
             raise TicketValidationError("This ticket has been voided.")
         if ticket.status != "boarded":
-            raise TicketValidationError(f"Only a boarded ticket can be completed (status: {ticket.status}).")
+            raise TicketValidationError(
+                f"Only a boarded ticket can be completed (status: {ticket.status})."
+            )
         ticket.status = "completed"
         ticket.validations.append({"action": "completed", "at": now})
         return ticket
@@ -290,7 +304,9 @@ class TicketStore:
         now = now if now is not None else time.time()
         ticket = self.get_by_reference(reference)
         if ticket is None:
-            raise TicketValidationError(f"unknown booking reference: {normalize_reference(reference)}")
+            raise TicketValidationError(
+                f"unknown booking reference: {normalize_reference(reference)}"
+            )
         if ticket.status == "completed":
             raise TicketValidationError("A completed ticket cannot be voided.")
         ticket.status = "void"
@@ -312,20 +328,26 @@ class TicketStore:
         now = now if now is not None else time.time()
         ticket = self.get_by_reference(reference)
         if ticket is None:
-            raise TicketValidationError(f"unknown booking reference: {normalize_reference(reference)}")
+            raise TicketValidationError(
+                f"unknown booking reference: {normalize_reference(reference)}"
+            )
         if ticket.status not in ("issued", "valid", "boarded"):
-            raise TicketValidationError(f"Cannot link minor info to ticket with status: {ticket.status}")
-        
+            raise TicketValidationError(
+                f"Cannot link minor info to ticket with status: {ticket.status}"
+            )
+
         ticket.minor_info.is_minor = True
         ticket.minor_info.guardian_journey_id = guardian_journey_id
         ticket.minor_info.minor_name = minor_name.strip()[:80]
         ticket.minor_info.minor_age = max(0, min(17, minor_age))
-        ticket.validations.append({
-            "action": "minor_linked",
-            "at": now,
-            "guardian_journey_id": guardian_journey_id,
-            "minor_name": minor_name,
-        })
+        ticket.validations.append(
+            {
+                "action": "minor_linked",
+                "at": now,
+                "guardian_journey_id": guardian_journey_id,
+                "minor_name": minor_name,
+            }
+        )
         return ticket
 
     def add_pickup_contact(
@@ -340,11 +362,14 @@ class TicketStore:
         now = now if now is not None else time.time()
         ticket = self.get_by_reference(reference)
         if ticket is None:
-            raise TicketValidationError(f"unknown booking reference: {normalize_reference(reference)}")
+            raise TicketValidationError(
+                f"unknown booking reference: {normalize_reference(reference)}"
+            )
         if not ticket.minor_info.is_minor:
             raise TicketValidationError("Ticket is not marked for minor travel")
-        
+
         import secrets
+
         verification_code = f"{secrets.randbelow(900000) + 100000:06d}"
         contact = PickupContact(
             contact_id=secrets.token_urlsafe(8),
@@ -354,12 +379,14 @@ class TicketStore:
             verification_code=verification_code,
         )
         ticket.minor_info.pickup_contacts.append(contact)
-        ticket.validations.append({
-            "action": "pickup_contact_added",
-            "at": now,
-            "contact_id": contact.contact_id,
-            "name": name,
-        })
+        ticket.validations.append(
+            {
+                "action": "pickup_contact_added",
+                "at": now,
+                "contact_id": contact.contact_id,
+                "name": name,
+            }
+        )
         return contact
 
     def verify_arrival_handshake(
@@ -373,26 +400,32 @@ class TicketStore:
         now = now if now is not None else time.time()
         ticket = self.get_by_reference(reference)
         if ticket is None:
-            raise TicketValidationError(f"unknown booking reference: {normalize_reference(reference)}")
+            raise TicketValidationError(
+                f"unknown booking reference: {normalize_reference(reference)}"
+            )
         if not ticket.minor_info.is_minor:
             raise TicketValidationError("Ticket is not marked for minor travel")
-        
-        contact = next((pc for pc in ticket.minor_info.pickup_contacts if pc.contact_id == contact_id), None)
+
+        contact = next(
+            (pc for pc in ticket.minor_info.pickup_contacts if pc.contact_id == contact_id), None
+        )
         if contact is None:
             raise TicketValidationError("Pickup contact not found")
-        
+
         if contact.verification_code != verification_code:
             return False
-        
+
         contact.verified_at = now
         ticket.minor_info.arrival_handshake_completed = True
         ticket.minor_info.handshake_completed_at = now
-        ticket.validations.append({
-            "action": "arrival_handshake_completed",
-            "at": now,
-            "contact_id": contact_id,
-            "contact_name": contact.name,
-        })
+        ticket.validations.append(
+            {
+                "action": "arrival_handshake_completed",
+                "at": now,
+                "contact_id": contact_id,
+                "contact_name": contact.name,
+            }
+        )
         return True
 
     def count(self) -> int:

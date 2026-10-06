@@ -42,8 +42,8 @@ from __future__ import annotations
 import os
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN, Waypoint, get_waypoint
 
@@ -80,9 +80,7 @@ _MOCK_STAGE_DWELL_SECONDS = 2.5
 _MOCK_DEFAULT_DELIVERY_WINDOW_SECONDS = 1800.0  # 30 minutes
 
 # Statuses that mean the physical hand-off to the carriage has happened.
-_DELIVERED_STATUSES = frozenset(
-    {STATUS_DELIVERED_TO_CARRIAGE, STATUS_RECEIVED}
-)
+_DELIVERED_STATUSES = frozenset({STATUS_DELIVERED_TO_CARRIAGE, STATUS_RECEIVED})
 
 
 @dataclass(frozen=True)
@@ -191,9 +189,15 @@ def _vendor(
     )
 
 
-def _item(item_id: str, vendor_id: str, name: str, price: float,
-          category: str = "food", description: str | None = None,
-          available: bool = True) -> MenuItem:
+def _item(
+    item_id: str,
+    vendor_id: str,
+    name: str,
+    price: float,
+    category: str = "food",
+    description: str | None = None,
+    available: bool = True,
+) -> MenuItem:
     return MenuItem(
         item_id=item_id,
         vendor_id=vendor_id,
@@ -231,147 +235,283 @@ def _seed_catalog() -> None:
 
     vendors: list[tuple[Vendor, list[MenuItem]]] = []
 
-    vendors.append(_vendor(
-        "pretoria_kiosk", "pretoria", "Union Buildings Kiosk", "food",
-        "A station-side kiosk serving quick breakfast and essentials for the journey ahead.",
-        4.3,
-        [
-            _item("pt_padstol", "pretoria_kiosk", "Padstol (single)", 15.0, "food",
-                  "Hot, fluffy vetkoek with your choice of jam, mince, or syrup."),
-            _item("pt_vetkoek_mine", "pretoria_kiosk", "Vetkoek with mince", 32.0, "food",
-                  "Deep-fried bread pocket stuffed with spiced mince."),
-            _item("pt_boerie_roll", "pretoria_kiosk", "Boerewors roll", 28.0, "food",
-                  "Grilled boerewors in a fresh roll with onion relish."),
-            _item("pt_bottle_water", "pretoria_kiosk", "Still water (500ml)", 12.0, "drink"),
-            _item("pt_coca_cola", "pretoria_kiosk", "Coca-Cola (330ml)", 18.0, "drink"),
-            _item("pt_sim_card", "pretoria_kiosk", "Prepaid SIM card", 49.0, "essentials",
-                  "Data and airtime for the journey (activated on collection)."),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "pretoria_kiosk",
+            "pretoria",
+            "Union Buildings Kiosk",
+            "food",
+            "A station-side kiosk serving quick breakfast and essentials for the journey ahead.",
+            4.3,
+            [
+                _item(
+                    "pt_padstol",
+                    "pretoria_kiosk",
+                    "Padstol (single)",
+                    15.0,
+                    "food",
+                    "Hot, fluffy vetkoek with your choice of jam, mince, or syrup.",
+                ),
+                _item(
+                    "pt_vetkoek_mine",
+                    "pretoria_kiosk",
+                    "Vetkoek with mince",
+                    32.0,
+                    "food",
+                    "Deep-fried bread pocket stuffed with spiced mince.",
+                ),
+                _item(
+                    "pt_boerie_roll",
+                    "pretoria_kiosk",
+                    "Boerewors roll",
+                    28.0,
+                    "food",
+                    "Grilled boerewors in a fresh roll with onion relish.",
+                ),
+                _item("pt_bottle_water", "pretoria_kiosk", "Still water (500ml)", 12.0, "drink"),
+                _item("pt_coca_cola", "pretoria_kiosk", "Coca-Cola (330ml)", 18.0, "drink"),
+                _item(
+                    "pt_sim_card",
+                    "pretoria_kiosk",
+                    "Prepaid SIM card",
+                    49.0,
+                    "essentials",
+                    "Data and airtime for the journey (activated on collection).",
+                ),
+            ],
+        )
+    )
 
-    vendors.append(_vendor(
-        "jhb_food_market", "johannesburg_park", "Park Station Food Market", "food",
-        "The bustle of the city in a tray — fast, fresh, and built for a long ride.",
-        4.1,
-        [
-            _item("jhb_vetkoek", "jhb_food_market", "Vetkoek", 20.0, "food",
-                  "Classic Cape Town-style vetkoek, golden and fluffy."),
-            _item("jhb_samosas", "jhb_food_market", "Beef samosas (2)", 35.0, "food",
-                  "Crispy parcels of spiced mince, served with tamarind dip."),
-            _item("jhb_bunny_chow", "jhb_food_market", "Mini bunny chow (100g)", 45.0, "food",
-                  "Durban street food — hollowed bread filled with curry. Mild by default."),
-            _item("jhb_airtime", "jhb_food_market", "R100 airtime", 100.0, "essentials"),
-            _item("jhb_apple_juice", "jhb_food_market", "Apple juice (500ml)", 22.0, "drink"),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "jhb_food_market",
+            "johannesburg_park",
+            "Park Station Food Market",
+            "food",
+            "The bustle of the city in a tray — fast, fresh, and built for a long ride.",
+            4.1,
+            [
+                _item(
+                    "jhb_vetkoek",
+                    "jhb_food_market",
+                    "Vetkoek",
+                    20.0,
+                    "food",
+                    "Classic Cape Town-style vetkoek, golden and fluffy.",
+                ),
+                _item(
+                    "jhb_samosas",
+                    "jhb_food_market",
+                    "Beef samosas (2)",
+                    35.0,
+                    "food",
+                    "Crispy parcels of spiced mince, served with tamarind dip.",
+                ),
+                _item(
+                    "jhb_bunny_chow",
+                    "jhb_food_market",
+                    "Mini bunny chow (100g)",
+                    45.0,
+                    "food",
+                    "Durban street food — hollowed bread filled with curry. Mild by default.",
+                ),
+                _item("jhb_airtime", "jhb_food_market", "R100 airtime", 100.0, "essentials"),
+                _item("jhb_apple_juice", "jhb_food_market", "Apple juice (500ml)", 22.0, "drink"),
+            ],
+        )
+    )
 
-    vendors.append(_vendor(
-        "kimbigleam", "kimberley", "Big Hole Takeaway", "food",
-        "Where the diamond rush began — now fueling the next leg south with proper Karoo flavour.",
-        4.5,
-        [
-            _item("kim_padstol", "kimbigleam", "Padstol (single)", 14.0, "food"),
-            _item("kim_vetkoek_sugar", "kimbigleam", "Vetkoek with sugar", 16.0, "food",
-                  "A Kimberley classic — sweet, simple, and perfect with tea."),
-            _item("kim_bologna_sandwich", "kimbigleam", "Bologna sandwich", 38.0, "food"),
-            _item("kim_mango_juice", "kimbigleam", "Mango juice (330ml)", 24.0, "drink"),
-            _item("kim_coca_cola", "kimbigleam", "Coca-Cola (330ml)", 18.0, "drink"),
-            _item("kim_biltong", "kimbigleam", "Biltong (100g)", 45.0, "food",
-                  "House-cured beef biltong, lightly salted."),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "kimbigleam",
+            "kimberley",
+            "Big Hole Takeaway",
+            "food",
+            "Where the diamond rush began — now fueling the next leg south with proper Karoo flavour.",
+            4.5,
+            [
+                _item("kim_padstol", "kimbigleam", "Padstol (single)", 14.0, "food"),
+                _item(
+                    "kim_vetkoek_sugar",
+                    "kimbigleam",
+                    "Vetkoek with sugar",
+                    16.0,
+                    "food",
+                    "A Kimberley classic — sweet, simple, and perfect with tea.",
+                ),
+                _item("kim_bologna_sandwich", "kimbigleam", "Bologna sandwich", 38.0, "food"),
+                _item("kim_mango_juice", "kimbigleam", "Mango juice (330ml)", 24.0, "drink"),
+                _item("kim_coca_cola", "kimbigleam", "Coca-Cola (330ml)", 18.0, "drink"),
+                _item(
+                    "kim_biltong",
+                    "kimbigleam",
+                    "Biltong (100g)",
+                    45.0,
+                    "food",
+                    "House-cured beef biltong, lightly salted.",
+                ),
+            ],
+        )
+    )
 
-    vendors.append(_vendor(
-        "fs_flavours", "bloemfontein", "Free State Flavours", "food",
-        "Potjiekos and rooibos — the Free State on a plate, takeaway style.",
-        4.2,
-        [
-            _item("fs_padstol", "fs_flavours", "Padstol (single)", 16.0, "food"),
-            _item("fs_rooibos", "fs_flavours", "Hot rooibos tea", 18.0, "drink",
-                  "Served in a takeaway cup, sweetened or plain."),
-            _item("fs_biltong", "fs_flavours", "Biltong (100g)", 42.0, "food"),
-            _item("fs_coca_cola", "fs_flavours", "Coca-Cola (330ml)", 17.0, "drink"),
-            _item("fs_water", "fs_flavours", "Still water (500ml)", 11.0, "drink"),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "fs_flavours",
+            "bloemfontein",
+            "Free State Flavours",
+            "food",
+            "Potjiekos and rooibos — the Free State on a plate, takeaway style.",
+            4.2,
+            [
+                _item("fs_padstol", "fs_flavours", "Padstol (single)", 16.0, "food"),
+                _item(
+                    "fs_rooibos",
+                    "fs_flavours",
+                    "Hot rooibos tea",
+                    18.0,
+                    "drink",
+                    "Served in a takeaway cup, sweetened or plain.",
+                ),
+                _item("fs_biltong", "fs_flavours", "Biltong (100g)", 42.0, "food"),
+                _item("fs_coca_cola", "fs_flavours", "Coca-Cola (330ml)", 17.0, "drink"),
+                _item("fs_water", "fs_flavours", "Still water (500ml)", 11.0, "drink"),
+            ],
+        )
+    )
 
-    vendors.append(_vendor(
-        "karoo_deli", "de_aar", "Karoo Junction Deli", "food",
-        "The great Karoo rail junction — serving roosterkoek and farm milk where the lines meet.",
-        4.4,
-        [
-            _item("daa_padstol", "karoo_deli", "Padstol (single)", 15.0, "food"),
-            _item("daa_roosterkoek", "karoo_deli", "Roosterkoek (2)", 28.0, "food",
-                  "Grilled over the coals, served with butter and jam."),
-            _item("daa_farm_milk", "karoo_deli", "Full-cream farm milk (500ml)", 22.0, "drink"),
-            _item("daa_rooibos", "karoo_deli", "Rooibos tea (330ml)", 20.0, "drink"),
-            _item("daa_biltong", "karoo_deli", "Biltong (100g)", 48.0, "food"),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "karoo_deli",
+            "de_aar",
+            "Karoo Junction Deli",
+            "food",
+            "The great Karoo rail junction — serving roosterkoek and farm milk where the lines meet.",
+            4.4,
+            [
+                _item("daa_padstol", "karoo_deli", "Padstol (single)", 15.0, "food"),
+                _item(
+                    "daa_roosterkoek",
+                    "karoo_deli",
+                    "Roosterkoek (2)",
+                    28.0,
+                    "food",
+                    "Grilled over the coals, served with butter and jam.",
+                ),
+                _item("daa_farm_milk", "karoo_deli", "Full-cream farm milk (500ml)", 22.0, "drink"),
+                _item("daa_rooibos", "karoo_deli", "Rooibos tea (330ml)", 20.0, "drink"),
+                _item("daa_biltong", "karoo_deli", "Biltong (100g)", 48.0, "food"),
+            ],
+        )
+    )
 
-    vendors.append(_vendor(
-        "karoo_kafe", "beaufort_west", "Karoo Kafée", "food",
-        "The Karoo's oldest town stop — coffee, koeksisters, and the morning gossip.",
-        4.0,
-        [
-            _item("bw_padstol", "karoo_kafe", "Padstol (single)", 15.0, "food"),
-            _item("bw_koeksister", "karoo_kafe", "Koeksister (2)", 30.0, "food",
-                  "Syruupy, twisted, and fried to order."),
-            _item("bw_coffee", "karoo_kafe", "Filter coffee (250ml)", 22.0, "drink"),
-            _item("bw_tea", "karoo_kafe", "Tea (250ml)", 16.0, "drink"),
-            _item("bw_water", "karoo_kafe", "Still water (500ml)", 12.0, "drink"),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "karoo_kafe",
+            "beaufort_west",
+            "Karoo Kafée",
+            "food",
+            "The Karoo's oldest town stop — coffee, koeksisters, and the morning gossip.",
+            4.0,
+            [
+                _item("bw_padstol", "karoo_kafe", "Padstol (single)", 15.0, "food"),
+                _item(
+                    "bw_koeksister",
+                    "karoo_kafe",
+                    "Koeksister (2)",
+                    30.0,
+                    "food",
+                    "Syruupy, twisted, and fried to order.",
+                ),
+                _item("bw_coffee", "karoo_kafe", "Filter coffee (250ml)", 22.0, "drink"),
+                _item("bw_tea", "karoo_kafe", "Tea (250ml)", 16.0, "drink"),
+                _item("bw_water", "karoo_kafe", "Still water (500ml)", 12.0, "drink"),
+            ],
+        )
+    )
 
-    vendors.append(_vendor(
-        "victoria_tea_room", "matjiesfontein", "Victorian Tea Room", "food",
-        "Gas-lit and genteel — scones and tea served the way travellers took them a century ago.",
-        4.6,
-        [
-            _item("matj_padstol", "victoria_tea_room", "Padstol (single)", 18.0, "food"),
-            _item("matj_scone", "victoria_tea_room", "Cream scone (2)", 35.0, "food",
-                  "With clotted cream and jam, just as they did in 1905."),
-            _item("matj_tea", "victoria_tea_room", "English breakfast tea", 20.0, "drink"),
-            _item("matj_koeksister", "victoria_tea_room", "Koeksister (1)", 18.0, "food"),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "victoria_tea_room",
+            "matjiesfontein",
+            "Victorian Tea Room",
+            "food",
+            "Gas-lit and genteel — scones and tea served the way travellers took them a century ago.",
+            4.6,
+            [
+                _item("matj_padstol", "victoria_tea_room", "Padstol (single)", 18.0, "food"),
+                _item(
+                    "matj_scone",
+                    "victoria_tea_room",
+                    "Cream scone (2)",
+                    35.0,
+                    "food",
+                    "With clotted cream and jam, just as they did in 1905.",
+                ),
+                _item("matj_tea", "victoria_tea_room", "English breakfast tea", 20.0, "drink"),
+                _item("matj_koeksister", "victoria_tea_room", "Koeksister (1)", 18.0, "food"),
+            ],
+        )
+    )
 
-    vendors.append(_vendor(
-        "hex_valley", "worcester", "Hex Valley Farm Stall", "food",
-        "Produce straight from the valley floor — roosterkoek, biltong, and valley juice.",
-        4.3,
-        [
-            _item("wor_padstol", "hex_valley", "Padstol (single)", 16.0, "food"),
-            _item("wor_roosterkoek", "hex_valley", "Roosterkoek (2)", 30.0, "food"),
-            _item("wor_juice", "hex_valley", "Valley orange juice (330ml)", 26.0, "drink"),
-            _item("wor_biltong", "hex_valley", "Biltong (100g)", 46.0, "food"),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "hex_valley",
+            "worcester",
+            "Hex Valley Farm Stall",
+            "food",
+            "Produce straight from the valley floor — roosterkoek, biltong, and valley juice.",
+            4.3,
+            [
+                _item("wor_padstol", "hex_valley", "Padstol (single)", 16.0, "food"),
+                _item("wor_roosterkoek", "hex_valley", "Roosterkoek (2)", 30.0, "food"),
+                _item("wor_juice", "hex_valley", "Valley orange juice (330ml)", 26.0, "drink"),
+                _item("wor_biltong", "hex_valley", "Biltong (100g)", 46.0, "food"),
+            ],
+        )
+    )
 
-    vendors.append(_vendor(
-        "foreshore_deli", "cape_town", "Foreshore Deli", "food",
-        "Cape Town classics — a Gatsby to share and everything you need after the long ride.",
-        4.4,
-        [
-            _item("ct_padstol", "foreshore_deli", "Padstol (single)", 17.0, "food"),
-            _item("ct_gatsby", "foreshore_deli", "Mini Gatsby (chips & curry)", 85.0, "food",
-                  "The Cape Town submarine sandwich, halved for sharing."),
-            _item("ct_samosa", "foreshore_deli", "Samosa (1)", 22.0, "food"),
-            _item("ct_water", "foreshore_deli", "Still water (500ml)", 13.0, "drink"),
-            _item("ct_coca_cola", "foreshore_deli", "Coca-Cola (330ml)", 19.0, "drink"),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "foreshore_deli",
+            "cape_town",
+            "Foreshore Deli",
+            "food",
+            "Cape Town classics — a Gatsby to share and everything you need after the long ride.",
+            4.4,
+            [
+                _item("ct_padstol", "foreshore_deli", "Padstol (single)", 17.0, "food"),
+                _item(
+                    "ct_gatsby",
+                    "foreshore_deli",
+                    "Mini Gatsby (chips & curry)",
+                    85.0,
+                    "food",
+                    "The Cape Town submarine sandwich, halved for sharing.",
+                ),
+                _item("ct_samosa", "foreshore_deli", "Samosa (1)", 22.0, "food"),
+                _item("ct_water", "foreshore_deli", "Still water (500ml)", 13.0, "drink"),
+                _item("ct_coca_cola", "foreshore_deli", "Coca-Cola (330ml)", 19.0, "drink"),
+            ],
+        )
+    )
 
-    vendors.append(_vendor(
-        "jhb_concourse", "johannesburg_park", "Concourse Traders", "essentials",
-        "Newspapers, chargers, and the bits you forgot to pack.",
-        3.7,
-        [
-            _item("jhb_newspaper", "jhb_concourse", "Daily newspaper", 25.0, "essentials"),
-            _item("jhb_power_bank", "jhb_concourse", "5,000mAh power bank", 299.0, "essentials"),
-            _item("jhb_charger", "jhb_concourse", "USB-C charger cable", 199.0, "essentials"),
-        ],
-    ))
+    vendors.append(
+        _vendor(
+            "jhb_concourse",
+            "johannesburg_park",
+            "Concourse Traders",
+            "essentials",
+            "Newspapers, chargers, and the bits you forgot to pack.",
+            3.7,
+            [
+                _item("jhb_newspaper", "jhb_concourse", "Daily newspaper", 25.0, "essentials"),
+                _item(
+                    "jhb_power_bank", "jhb_concourse", "5,000mAh power bank", 299.0, "essentials"
+                ),
+                _item("jhb_charger", "jhb_concourse", "USB-C charger cable", 199.0, "essentials"),
+            ],
+        )
+    )
 
     for vendor, menu in vendors:
         _MOCK_VENDOR_CATALOG[vendor.vendor_id] = vendor
@@ -382,8 +522,8 @@ _seed_catalog()
 
 
 def _supported_stop_ids() -> set[str]:
-    """Every waypoint on the Pretoria–Cape Town corridor supports Zulzi
-    carriage delivery in the mock — each has station-side vendors modelled."""
+    """Every waypoint on the Pretoria-Cape Town corridor supports Zulzi
+    carriage delivery in the mock - each has station-side vendors modelled."""
     return {w.id for w in PRETORIA_TO_CAPE_TOWN}
 
 
@@ -432,7 +572,9 @@ class ZulziStore:
         self._api_base = api_base
         self._api_key = api_key
         self._orders: dict[str, ZulziOrder] = {}
-        self._vendor_catalog = vendor_catalog if vendor_catalog is not None else dict(_MOCK_VENDOR_CATALOG)
+        self._vendor_catalog = (
+            vendor_catalog if vendor_catalog is not None else dict(_MOCK_VENDOR_CATALOG)
+        )
         self._menus = menus if menus is not None else {k: list(v) for k, v in _MOCK_MENUS.items()}
 
     @property
@@ -500,7 +642,9 @@ class ZulziStore:
             if quantity > 20:
                 raise OrderValidationError(f"quantity for {item_id!r} exceeds the 20-piece limit")
 
-    def _projected_delivery_eta(self, waypoint: Waypoint, journey_id: str | None, now: float) -> float | None:
+    def _projected_delivery_eta(
+        self, waypoint: Waypoint, journey_id: str | None, now: float
+    ) -> float | None:
         """Project when the train will arrive at the delivery stop.
 
         If the rider is on a tracked journey, the Journey Guardian's own ETA
@@ -511,12 +655,19 @@ class ZulziStore:
         if journey_id is not None:
             from app.story_engine.journey import is_valid_journey_id, journey_registry
 
-            if is_valid_journey_id(journey_id) and journey_registry.get_journey(journey_id) is not None:
+            if (
+                is_valid_journey_id(journey_id)
+                and journey_registry.get_journey(journey_id) is not None
+            ):
                 eta = journey_registry.eta_for(journey_id)
                 eta_block = eta.get("eta", {}) or {}
-                if eta_block.get("next_station") == waypoint.name and eta_block.get("next_station_at"):
+                if eta_block.get("next_station") == waypoint.name and eta_block.get(
+                    "next_station_at"
+                ):
                     try:
-                        epoch = time.mktime(time.strptime(eta_block["next_station_at"], "%Y-%m-%dT%H:%M:%SZ"))
+                        epoch = time.mktime(
+                            time.strptime(eta_block["next_station_at"], "%Y-%m-%dT%H:%M:%SZ")
+                        )
                         return epoch
                     except (TypeError, ValueError):
                         pass
