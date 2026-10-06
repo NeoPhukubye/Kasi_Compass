@@ -101,9 +101,9 @@ def _humanize_duration(hours: float) -> str:
     if total_minutes < 1.0:
         return f"{int(total_minutes * 60)}s"
     if total_minutes < 60.0:
-        return f"{int(round(total_minutes))}m"
+        return f"{round(total_minutes)}m"
     whole_hours = int(total_minutes // 60)
-    minutes = int(round(total_minutes - whole_hours * 60))
+    minutes = round(total_minutes - whole_hours * 60)
     if minutes == 60:
         whole_hours += 1
         minutes = 0
@@ -113,13 +113,13 @@ def _humanize_duration(hours: float) -> str:
 def _humanize_eta(epoch: float | None, now: float) -> str:
     """'2 minutes', '1 hour 15 minutes', 'Arriving now' — for the family view."""
     if epoch is None:
-        return 'Not available'
+        return "Not available"
     diff_seconds = epoch - now
     if diff_seconds <= 0:
-        return 'Arriving now'
+        return "Arriving now"
     total_minutes = int(diff_seconds // 60)
     if total_minutes < 1:
-        return 'Less than a minute'
+        return "Less than a minute"
     if total_minutes < 60:
         return f"{total_minutes} minute{'s' if total_minutes != 1 else ''}"
     hours = total_minutes // 60
@@ -174,7 +174,9 @@ class EtaResult:
             "speed_source": self.speed_source,
             "eta": {
                 "next_station": self.eta_next_station_name,
-                "next_station_at": _iso(self.eta_next_station_epoch) if self.eta_next_station_epoch else None,
+                "next_station_at": _iso(self.eta_next_station_epoch)
+                if self.eta_next_station_epoch
+                else None,
                 "next_station_in": _humanize_eta(self.eta_next_station_epoch, now),
                 "arrival_station": self.eta_arrival_name,
                 "arrival_at": _iso(self.eta_arrival_epoch) if self.eta_arrival_epoch else None,
@@ -186,7 +188,9 @@ class EtaResult:
             "next_province": self.next_province,
             "distance_to_next_station_km": round(self.distance_to_next_station_km, 1),
             "last_report_seconds_ago": (
-                round(self.last_report_seconds_ago, 1) if self.last_report_seconds_ago is not None else None
+                round(self.last_report_seconds_ago, 1)
+                if self.last_report_seconds_ago is not None
+                else None
             ),
             "last_report_source": self.last_report_source,
             "milestones": [
@@ -213,7 +217,9 @@ def _next_stop_after(distance_along_km: float) -> tuple[str, float, float] | Non
     for index, waypoint in enumerate(PRETORIA_TO_CAPE_TOWN):
         if index > 0:
             previous = PRETORIA_TO_CAPE_TOWN[index - 1]
-            cumulative += haversine_km(previous.latitude, previous.longitude, waypoint.latitude, waypoint.longitude)
+            cumulative += haversine_km(
+                previous.latitude, previous.longitude, waypoint.latitude, waypoint.longitude
+            )
         if index == 0:
             continue
         if cumulative > distance_along_km:
@@ -229,11 +235,15 @@ def _waypoint_cumulative_km(waypoint_id: str) -> float | None:
             return cumulative
         if index > 0:
             previous = PRETORIA_TO_CAPE_TOWN[index - 1]
-            cumulative += haversine_km(previous.latitude, previous.longitude, waypoint.latitude, waypoint.longitude)
+            cumulative += haversine_km(
+                previous.latitude, previous.longitude, waypoint.latitude, waypoint.longitude
+            )
     return None
 
 
-def _eta_to_waypoint(distance_along_km: float, speed_kmh: float, waypoint_id: str, now: float) -> float | None:
+def _eta_to_waypoint(
+    distance_along_km: float, speed_kmh: float, waypoint_id: str, now: float
+) -> float | None:
     """Compute ETA epoch to a specific waypoint. Returns None if waypoint is behind or unreachable."""
     target_km = _waypoint_cumulative_km(waypoint_id)
     if target_km is None or target_km <= distance_along_km:
@@ -273,11 +283,15 @@ def estimate_speed(
 
     window = telemetry[-SPEED_SAMPLE_POINTS:]
     samples: list[float] = []
-    for previous, current in zip(window, window[1:]):
+    from itertools import pairwise
+
+    for previous, current in pairwise(window):
         elapsed = current.recorded_at - previous.recorded_at
         if elapsed <= 0:
             continue
-        travelled = haversine_km(previous.latitude, previous.longitude, current.latitude, current.longitude)
+        travelled = haversine_km(
+            previous.latitude, previous.longitude, current.latitude, current.longitude
+        )
         samples.append(travelled / elapsed * 3600.0)
 
     if not samples:
@@ -308,7 +322,9 @@ def build_milestones(position: CorridorPosition) -> list[Milestone]:
     for index, waypoint in enumerate(PRETORIA_TO_CAPE_TOWN):
         if index > 0:
             previous = PRETORIA_TO_CAPE_TOWN[index - 1]
-            cumulative += haversine_km(previous.latitude, previous.longitude, waypoint.latitude, waypoint.longitude)
+            cumulative += haversine_km(
+                previous.latitude, previous.longitude, waypoint.latitude, waypoint.longitude
+            )
 
         if index == 0:
             milestones.append(
@@ -413,7 +429,9 @@ def compute_eta(journey_id: str, now: float | None = None) -> EtaResult:
     projected_position = CorridorPosition(
         latitude=latest.latitude,
         longitude=latest.longitude,
-        progress_fraction=min(1.0, projected_distance / position.total_km) if position.total_km else 0.0,
+        progress_fraction=min(1.0, projected_distance / position.total_km)
+        if position.total_km
+        else 0.0,
         distance_along_km=projected_distance,
         total_km=position.total_km,
         remaining_km=max(0.0, position.total_km - projected_distance),
@@ -471,7 +489,9 @@ def compute_eta(journey_id: str, now: float | None = None) -> EtaResult:
     elif speed_source == "stationary":
         delay_display = "Stopped — ETA pending a clear reason from the operator"
     elif stale:
-        delay_display = f"No position report for {_humanize_duration(last_report_seconds_ago / 3600.0)}"
+        delay_display = (
+            f"No position report for {_humanize_duration(last_report_seconds_ago / 3600.0)}"
+        )
     else:
         delay_display = "On schedule"
 
