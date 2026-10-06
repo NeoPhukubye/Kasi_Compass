@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
+
 @dataclass(frozen=True)
 class LocalizedStory:
     language_code: str  # e.g. "en", "zu", "af", "xh"
@@ -34,11 +35,13 @@ class LocalizedStory:
     reviewed_by: str  # who signed off on this specific translation/text
     audio_url: str | None = None
 
+
 @dataclass(frozen=True)
 class WaypointStory:
     waypoint_id: str
     source: str  # who originally contributed this story (person/org, not "AI")
     localized: dict[str, LocalizedStory] = field(default_factory=dict)
+
 
 @dataclass(frozen=True)
 class PointOfInterest:
@@ -57,6 +60,7 @@ class PointOfInterest:
             "lon": self.lon,
             "description": self.description,
         }
+
 
 # Seed content: real waypoints, human-sourced placeholder copy pending
 # actual partner interviews (see WBS Phase 1 — narrator/heritage-site
@@ -256,7 +260,11 @@ WAYPOINT_POIS: dict[str, list[PointOfInterest]] = {
             "A museum showcasing the natural and cultural history of the Free State.",
         ),
         PointOfInterest(
-            "Station Fuel", "fuel", -29.0870, 26.1560, "Fuel and convenience store near the station."
+            "Station Fuel",
+            "fuel",
+            -29.0870,
+            26.1560,
+            "Fuel and convenience store near the station.",
         ),
     ],
     "de_aar": [
@@ -296,9 +304,7 @@ WAYPOINT_POIS: dict[str, list[PointOfInterest]] = {
             22.5825,
             "A popular spot for local produce and artisanal goods.",
         ),
-        PointOfInterest(
-            "Station Fuel", "fuel", -32.3575, 22.5800, "Fuel and a quick snack stop."
-        ),
+        PointOfInterest("Station Fuel", "fuel", -32.3575, 22.5800, "Fuel and a quick snack stop."),
         PointOfInterest(
             "Public Parking", "parking", -32.3580, 22.5790, "Free parking near the town center."
         ),
@@ -318,9 +324,7 @@ WAYPOINT_POIS: dict[str, list[PointOfInterest]] = {
             19.4495,
             "A weekend market with local wine, cheese, and crafts.",
         ),
-        PointOfInterest(
-            "Fuel Station", "fuel", -33.6475, 19.4470, "A 24/7 fuel station."
-        ),
+        PointOfInterest("Fuel Station", "fuel", -33.6475, 19.4470, "A 24/7 fuel station."),
         PointOfInterest(
             "Town Parking", "parking", -33.6480, 19.4460, "Paid parking in the town center."
         ),
@@ -360,6 +364,7 @@ WAYPOINT_POIS: dict[str, list[PointOfInterest]] = {
     ],
 }
 
+
 def get_story_source(waypoint_id: str) -> str | None:
     """
     Return who originally contributed a waypoint's story (person,
@@ -370,6 +375,7 @@ def get_story_source(waypoint_id: str) -> str | None:
     """
     entry = STORY_CONTENT.get(waypoint_id)
     return entry.source if entry is not None else None
+
 
 def get_story(waypoint_id: str, language_code: str = "en") -> LocalizedStory | None:
     """
@@ -383,6 +389,7 @@ def get_story(waypoint_id: str, language_code: str = "en") -> LocalizedStory | N
         return None
     return entry.localized.get(language_code) or entry.localized.get("en")
 
+
 def get_pois(waypoint_id: str) -> list[PointOfInterest]:
     """
     Return nearby points of interest for a waypoint (shops, markets,
@@ -390,6 +397,7 @@ def get_pois(waypoint_id: str) -> list[PointOfInterest]:
     stops before getting off the train.
     """
     return list(WAYPOINT_POIS.get(waypoint_id, []))
+
 
 # ---------------------------------------------------------------------
 # Shosholoza stop-discovery corpus.
@@ -815,68 +823,164 @@ CORRIDOR_ERAS: dict[str, dict] = {
 # sentence shown under it.
 STATION_ERA_LAYOUT: dict[str, dict[str, dict]] = {
     "pretoria": {
-        "1970": {"platforms": 4, "tracks": 6, "station_class": "terminus",
-                 "change": "Four platform faces under the Herbert Baker trainshed; the Capital Park workshops still turning out steam-era stock."},
-        "1990": {"platforms": 4, "tracks": 6, "station_class": "terminus",
-                 "change": "Unchanged masonry, entirely changed trains: diesel-electrics on every platform."},
-        "2023": {"platforms": 5, "tracks": 7, "station_class": "terminus",
-                 "change": "An added platform face for Gautrain interchange, with the historic building restored behind the trading precinct."},
+        "1970": {
+            "platforms": 4,
+            "tracks": 6,
+            "station_class": "terminus",
+            "change": "Four platform faces under the Herbert Baker trainshed; the Capital Park workshops still turning out steam-era stock.",
+        },
+        "1990": {
+            "platforms": 4,
+            "tracks": 6,
+            "station_class": "terminus",
+            "change": "Unchanged masonry, entirely changed trains: diesel-electrics on every platform.",
+        },
+        "2023": {
+            "platforms": 5,
+            "tracks": 7,
+            "station_class": "terminus",
+            "change": "An added platform face for Gautrain interchange, with the historic building restored behind the trading precinct.",
+        },
     },
     "johannesburg_park": {
-        "1970": {"platforms": 9, "tracks": 12, "station_class": "hub",
-                 "change": "Nine platforms under a vast trainshed, absorbing the migrant-labour traffic that defined the Rand in the 1970s."},
-        "1990": {"platforms": 10, "tracks": 13, "station_class": "hub",
-                 "change": "Metrorail electrification forces a rebuild of the concourse; an extra platform face added for suburban EMUs."},
-        "2023": {"platforms": 12, "tracks": 15, "station_class": "hub",
-                 "change": "Gautrain, Metrorail and Shosholoza Meyl stacked on three levels — the busiest interchange on the continent."},
+        "1970": {
+            "platforms": 9,
+            "tracks": 12,
+            "station_class": "hub",
+            "change": "Nine platforms under a vast trainshed, absorbing the migrant-labour traffic that defined the Rand in the 1970s.",
+        },
+        "1990": {
+            "platforms": 10,
+            "tracks": 13,
+            "station_class": "hub",
+            "change": "Metrorail electrification forces a rebuild of the concourse; an extra platform face added for suburban EMUs.",
+        },
+        "2023": {
+            "platforms": 12,
+            "tracks": 15,
+            "station_class": "hub",
+            "change": "Gautrain, Metrorail and Shosholoza Meyl stacked on three levels — the busiest interchange on the continent.",
+        },
     },
     "kimberley": {
-        "1970": {"platforms": 3, "tracks": 5, "station_class": "junction",
-                 "change": "A working junction for the Kimberley–Rustenburg and Bloemfontein branches, under constant mineral freight."},
-        "1990": {"platforms": 3, "tracks": 5, "station_class": "junction",
-                 "change": "Junction intact, freight thinner; the platform exits begin filling with informal traders."},
-        "2023": {"platforms": 4, "tracks": 5, "station_class": "junction",
-                 "change": "A tourism-facing platform added alongside the diamond-museum precinct, on an otherwise unchanged layout."},
+        "1970": {
+            "platforms": 3,
+            "tracks": 5,
+            "station_class": "junction",
+            "change": "A working junction for the Kimberley-Rustenburg and Bloemfontein branches, under constant mineral freight.",
+        },
+        "1990": {
+            "platforms": 3,
+            "tracks": 5,
+            "station_class": "junction",
+            "change": "Junction intact, freight thinner; the platform exits begin filling with informal traders.",
+        },
+        "2023": {
+            "platforms": 4,
+            "tracks": 5,
+            "station_class": "junction",
+            "change": "A tourism-facing platform added alongside the diamond-museum precinct, on an otherwise unchanged layout.",
+        },
     },
     "de_aar": {
-        "1970": {"platforms": 5, "tracks": 9, "station_class": "major_junction",
-                 "change": "The Karoo's great interchange, running 24-hour steam, with lines to Cape Town, Port Elizabeth and Namibia."},
-        "1990": {"platforms": 4, "tracks": 7, "station_class": "major_junction",
-                 "change": "Route rationalisation closes a siding; the yard is visibly smaller than it was a decade earlier."},
-        "2023": {"platforms": 3, "tracks": 5, "station_class": "junction",
-                 "change": "A working halt rather than a hub — but still the point where traction changes on the corridor."},
+        "1970": {
+            "platforms": 5,
+            "tracks": 9,
+            "station_class": "major_junction",
+            "change": "The Karoo's great interchange, running 24-hour steam, with lines to Cape Town, Port Elizabeth and Namibia.",
+        },
+        "1990": {
+            "platforms": 4,
+            "tracks": 7,
+            "station_class": "major_junction",
+            "change": "Route rationalisation closes a siding; the yard is visibly smaller than it was a decade earlier.",
+        },
+        "2023": {
+            "platforms": 3,
+            "tracks": 5,
+            "station_class": "junction",
+            "change": "A working halt rather than a hub — but still the point where traction changes on the corridor.",
+        },
     },
     "beaufort_west": {
-        "1970": {"platforms": 3, "tracks": 5, "station_class": "junction",
-                 "change": "A watering stop of real consequence: steam engines took water here for the Karoo beyond."},
-        "1990": {"platforms": 2, "tracks": 4, "station_class": "junction",
-                 "change": "Steam regular working ends; the tank shrinks as diesels need no water stops."},
-        "2023": {"platforms": 2, "tracks": 4, "station_class": "junction",
-                 "change": "Platforms and tracks essentially unchanged for fifty years — the most stable layout on the corridor."},
+        "1970": {
+            "platforms": 3,
+            "tracks": 5,
+            "station_class": "junction",
+            "change": "A watering stop of real consequence: steam engines took water here for the Karoo beyond.",
+        },
+        "1990": {
+            "platforms": 2,
+            "tracks": 4,
+            "station_class": "junction",
+            "change": "Steam regular working ends; the tank shrinks as diesels need no water stops.",
+        },
+        "2023": {
+            "platforms": 2,
+            "tracks": 4,
+            "station_class": "junction",
+            "change": "Platforms and tracks essentially unchanged for fifty years — the most stable layout on the corridor.",
+        },
     },
     "matjiesfontein": {
-        "1970": {"platforms": 1, "tracks": 2, "station_class": "passing_loop",
-                 "change": "A single platform and a passing loop, gas-lit, serving the Cape mail train's refreshment stop."},
-        "1990": {"platforms": 1, "tracks": 2, "station_class": "passing_loop",
-                 "change": "Unchanged in every structural respect — the reason it is a declared heritage site."},
-        "2023": {"platforms": 1, "tracks": 2, "station_class": "passing_loop",
-                 "change": "Still one platform, still two lines, still the Blue Train's mandatory stop."},
+        "1970": {
+            "platforms": 1,
+            "tracks": 2,
+            "station_class": "passing_loop",
+            "change": "A single platform and a passing loop, gas-lit, serving the Cape mail train's refreshment stop.",
+        },
+        "1990": {
+            "platforms": 1,
+            "tracks": 2,
+            "station_class": "passing_loop",
+            "change": "Unchanged in every structural respect — the reason it is a declared heritage site.",
+        },
+        "2023": {
+            "platforms": 1,
+            "tracks": 2,
+            "station_class": "passing_loop",
+            "change": "Still one platform, still two lines, still the Blue Train's mandatory stop.",
+        },
     },
     "worcester": {
-        "1970": {"platforms": 3, "tracks": 5, "station_class": "junction",
-                 "change": "Banking engines stood here ready to assist the climb through the Hex River pass."},
-        "1990": {"platforms": 3, "tracks": 5, "station_class": "junction",
-                 "change": "The Hex River electrification removes the need for bankers; the sidings they used sit empty."},
-        "2023": {"platforms": 4, "tracks": 6, "station_class": "junction",
-                 "change": "Electrified throughout, with an added platform face for Winelands tourism."},
+        "1970": {
+            "platforms": 3,
+            "tracks": 5,
+            "station_class": "junction",
+            "change": "Banking engines stood here ready to assist the climb through the Hex River pass.",
+        },
+        "1990": {
+            "platforms": 3,
+            "tracks": 5,
+            "station_class": "junction",
+            "change": "The Hex River electrification removes the need for bankers; the sidings they used sit empty.",
+        },
+        "2023": {
+            "platforms": 4,
+            "tracks": 6,
+            "station_class": "junction",
+            "change": "Electrified throughout, with an added platform face for Winelands tourism.",
+        },
     },
     "cape_town": {
-        "1970": {"platforms": 8, "tracks": 11, "station_class": "terminus",
-                 "change": "The grand terminus beneath Table Mountain, where the Blue Train and Trans-Karoo Express ended their runs."},
-        "1990": {"platforms": 8, "tracks": 12, "station_class": "terminus",
-                 "change": "Metrorail's suburban crush begins; the Edwardian building still standing over a transformed forecourt."},
-        "2023": {"platforms": 9, "tracks": 13, "station_class": "terminus",
-                 "change": "Restored Victorian facade opening onto a plaza of food markets, with MyCiTi buses outside."},
+        "1970": {
+            "platforms": 8,
+            "tracks": 11,
+            "station_class": "terminus",
+            "change": "The grand terminus beneath Table Mountain, where the Blue Train and Trans-Karoo Express ended their runs.",
+        },
+        "1990": {
+            "platforms": 8,
+            "tracks": 12,
+            "station_class": "terminus",
+            "change": "Metrorail's suburban crush begins; the Edwardian building still standing over a transformed forecourt.",
+        },
+        "2023": {
+            "platforms": 9,
+            "tracks": 13,
+            "station_class": "terminus",
+            "change": "Restored Victorian facade opening onto a plaza of food markets, with MyCiTi buses outside.",
+        },
     },
 }
 
