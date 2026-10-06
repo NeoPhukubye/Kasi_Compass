@@ -3,3 +3,7 @@
 -r requirements.txt
 pytest>=7.0.0
 httpx>=0.24.0
+
+# Linting and type checking (installed in CI)
+ruff>=0.4.0
+mypy>=1.8.0
