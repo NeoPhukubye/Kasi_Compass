@@ -5,8 +5,8 @@ offline story pack, and QR boarding.
 Run with: pytest backend/tests/test_passport_and_extras.py
 """
 
+import app.story_engine.spatial as spatial_module
 import pytest
-
 from app.story_engine.content_store import (
     ERA_YEARS,
     STATION_ERA_LAYOUT,
@@ -19,7 +19,6 @@ from app.story_engine.eta import simulate_corridor_run
 from app.story_engine.passport import STAMP_RADIUS_METERS, build_passport
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 from app.story_engine.spatial import SpatialStore
-import app.story_engine.spatial as spatial_module
 
 JOURNEY_A = "11111111-1111-4111-8111-111111111111"
 
@@ -35,6 +34,7 @@ def store(monkeypatch):
 # ---------------------------------------------------------------------
 # Time Machine era data
 # ---------------------------------------------------------------------
+
 
 def test_every_stop_with_eras_has_all_three_of_them():
     for stop_id, eras in TIMELINE_EVOLUTION.items():
@@ -78,8 +78,10 @@ def test_electrification_appears_after_1970_and_not_before():
 
 
 def test_layouts_change_across_eras_where_the_history_says_they_did():
-    assert STATION_ERA_LAYOUT["johannesburg_park"]["1970"]["tracks"] < \
-        STATION_ERA_LAYOUT["johannesburg_park"]["2023"]["tracks"]
+    assert (
+        STATION_ERA_LAYOUT["johannesburg_park"]["1970"]["tracks"]
+        < STATION_ERA_LAYOUT["johannesburg_park"]["2023"]["tracks"]
+    )
 
 
 def test_matjiesfontein_stays_a_two_line_passing_loop_for_fifty_years():
@@ -123,6 +125,7 @@ def test_get_stop_content_never_returns_image_fields_anymore():
 # Journey passport
 # ---------------------------------------------------------------------
 
+
 def test_a_journey_with_no_reports_has_an_empty_passport(store):
     passport = build_passport(JOURNEY_A)
     assert passport["stamps"] == []
@@ -158,7 +161,11 @@ def test_stamps_carry_provenance_and_distance(store):
 def test_stamps_record_the_provinces_crossed(store):
     simulate_corridor_run(JOURNEY_A, start_waypoint_id="pretoria", steps=50, step_minutes=30)
     assert build_passport(JOURNEY_A)["provinces_visited"] == [
-        "Gauteng", "Northern Cape", "Free State", "Northern Cape", "Western Cape"
+        "Gauteng",
+        "Northern Cape",
+        "Free State",
+        "Northern Cape",
+        "Western Cape",
     ]
 
 

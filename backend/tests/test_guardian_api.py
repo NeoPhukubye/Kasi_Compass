@@ -9,14 +9,12 @@ the pitch is this contract, so it is worth testing at exactly this boundary.
 Run with: pytest backend/tests/test_guardian_api.py
 """
 
+import app.story_engine.spatial as spatial_module
 import pytest
-from fastapi.testclient import TestClient
-
 from app.story_engine.api import app
-from app.story_engine.journey import journey_registry
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 from app.story_engine.spatial import SpatialStore
-import app.story_engine.spatial as spatial_module
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -38,6 +36,7 @@ def isolated_store(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------
 # Spatial layer
 # ---------------------------------------------------------------------
+
 
 def test_health_reports_which_spatial_driver_is_live():
     body = client.get("/health").json()
@@ -78,6 +77,7 @@ def test_resolve_position_rejects_impossible_coordinates():
 # Journey Guardian
 # ---------------------------------------------------------------------
 
+
 def test_a_journey_that_never_reported_reads_as_waiting_not_missing():
     journey_id = "33333333-3333-4333-8333-333333333333"
     response = client.get(f"/guardian/journeys/{journey_id}/eta")
@@ -95,7 +95,8 @@ def test_eta_endpoint_rejects_a_non_uuid_journey_id():
 
 def test_create_journey_returns_the_handle():
     response = client.post(
-        "/guardian/journeys", json={"origin_waypoint_id": "pretoria", "destination_waypoint_id": "cape_town"}
+        "/guardian/journeys",
+        json={"origin_waypoint_id": "pretoria", "destination_waypoint_id": "cape_town"},
     )
     assert response.status_code == 201
     assert response.json()["guardian_link_count"] == 0
@@ -152,8 +153,11 @@ def test_telemetry_endpoint_returns_the_audit_trail():
         client.post(
             f"/guardian/journeys/{journey_id}/position",
             json={
-                "journey_id": journey_id, "lat": lat, "lon": lon,
-                "source": "corridor", "recorded_at": 1_000.0 + step * 1800,
+                "journey_id": journey_id,
+                "lat": lat,
+                "lon": lon,
+                "source": "corridor",
+                "recorded_at": 1_000.0 + step * 1800,
             },
         )
     body = client.get(f"/guardian/telemetry/{journey_id}").json()
@@ -186,7 +190,13 @@ def test_a_full_corridor_run_completes_the_passport():
     passport = client.get(f"/guardian/journeys/{run['journey_id']}/passport").json()
     assert passport["stamps_earned"] == passport["stamps_total"] == 9
     assert passport["complete"] is True
-    assert passport["provinces_visited"] == ["Gauteng", "Northern Cape", "Free State", "Northern Cape", "Western Cape"]
+    assert passport["provinces_visited"] == [
+        "Gauteng",
+        "Northern Cape",
+        "Free State",
+        "Northern Cape",
+        "Western Cape",
+    ]
 
 
 def test_passport_endpoint_rejects_a_non_uuid_journey_id():
@@ -202,6 +212,7 @@ def test_passport_for_a_journey_that_never_reported_is_empty_not_an_error():
 # ---------------------------------------------------------------------
 # Offline story pack
 # ---------------------------------------------------------------------
+
 
 def test_offline_pack_is_self_contained():
     pack = client.get("/journey/offline-pack?waypoint_id=matjiesfontein").json()
@@ -255,8 +266,11 @@ def test_offline_pack_carries_a_waypoint_position():
 # QR boarding
 # ---------------------------------------------------------------------
 
+
 def test_ticket_qr_encodes_a_payload_with_no_personal_data():
-    reference = client.post("/tickets", json={"holder_label": "Ms Ndlovu"}).json()["booking_reference"]
+    reference = client.post("/tickets", json={"holder_label": "Ms Ndlovu"}).json()[
+        "booking_reference"
+    ]
     body = client.get(f"/tickets/{reference}/qr").json()
     assert body["booking_reference"] == reference
     assert reference in body["payload"]
@@ -300,15 +314,21 @@ def test_health_reports_whether_qr_is_available():
 
 
 def test_simulate_run_rejects_an_unknown_start():
-    assert client.post("/guardian/simulate-run", json={"start_waypoint_id": "atlantis"}).status_code == 422
+    assert (
+        client.post("/guardian/simulate-run", json={"start_waypoint_id": "atlantis"}).status_code
+        == 422
+    )
 
 
 # ---------------------------------------------------------------------
 # Guardian links
 # ---------------------------------------------------------------------
 
+
 def test_a_family_link_resolves_to_a_read_only_view():
-    run = client.post("/guardian/simulate-run", json={"start_waypoint_id": "de_aar", "steps": 4}).json()
+    run = client.post(
+        "/guardian/simulate-run", json={"start_waypoint_id": "de_aar", "steps": 4}
+    ).json()
     journey_id = run["journey_id"]
 
     link = client.post(
@@ -327,7 +347,9 @@ def test_a_family_link_resolves_to_a_read_only_view():
 
 
 def test_a_revoked_link_stops_working_at_once():
-    run = client.post("/guardian/simulate-run", json={"start_waypoint_id": "de_aar", "steps": 3}).json()
+    run = client.post(
+        "/guardian/simulate-run", json={"start_waypoint_id": "de_aar", "steps": 3}
+    ).json()
     journey_id = run["journey_id"]
     token = client.post(f"/guardian/journeys/{journey_id}/links", json={}).json()["token"]
 
@@ -337,7 +359,12 @@ def test_a_revoked_link_stops_working_at_once():
 
 
 def test_issuing_a_link_for_an_unknown_journey_is_a_404():
-    assert client.post("/guardian/journeys/99999999-9999-4999-8999-999999999999/links", json={}).status_code == 404
+    assert (
+        client.post(
+            "/guardian/journeys/99999999-9999-4999-8999-999999999999/links", json={}
+        ).status_code
+        == 404
+    )
 
 
 def test_an_unknown_or_malformed_token_is_a_404():
@@ -353,6 +380,7 @@ def test_revoking_an_unknown_token_is_a_404():
 # Ticket validation
 # ---------------------------------------------------------------------
 
+
 def test_ticket_lifecycle_issue_validate_board():
     ticket = client.post(
         "/tickets", json={"origin_waypoint_id": "pretoria", "destination_waypoint_id": "cape_town"}
@@ -360,8 +388,14 @@ def test_ticket_lifecycle_issue_validate_board():
     assert ticket.status_code == 201
     reference = ticket.json()["booking_reference"]
 
-    assert client.post("/tickets/validate", json={"booking_reference": reference}).json()["admissible"] is True
-    assert client.post("/tickets/board", json={"booking_reference": reference}).json()["status"] == "boarded"
+    assert (
+        client.post("/tickets/validate", json={"booking_reference": reference}).json()["admissible"]
+        is True
+    )
+    assert (
+        client.post("/tickets/board", json={"booking_reference": reference}).json()["status"]
+        == "boarded"
+    )
     # A used ticket cannot be boarded twice.
     assert client.post("/tickets/board", json={"booking_reference": reference}).status_code == 422
 
@@ -369,12 +403,19 @@ def test_ticket_lifecycle_issue_validate_board():
 def test_ticket_reference_lookup_is_forgiving_of_case_and_spacing():
     reference = client.post("/tickets", json={}).json()["booking_reference"]
     assert client.get(f"/tickets/{reference.lower().replace(' ', '')}").status_code == 200
-    assert client.post("/tickets/validate", json={"booking_reference": reference.replace(" ", "")}).status_code == 200
+    assert (
+        client.post(
+            "/tickets/validate", json={"booking_reference": reference.replace(" ", "")}
+        ).status_code
+        == 200
+    )
 
 
 def test_an_unknown_ticket_is_a_404():
     assert client.get("/tickets/ZZ99 XXX").status_code == 404
-    assert client.post("/tickets/validate", json={"booking_reference": "ZZ99 XXX"}).status_code == 404
+    assert (
+        client.post("/tickets/validate", json={"booking_reference": "ZZ99 XXX"}).status_code == 404
+    )
 
 
 def test_a_malformed_reference_is_rejected_at_issue_time():

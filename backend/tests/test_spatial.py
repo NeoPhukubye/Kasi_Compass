@@ -10,7 +10,6 @@ test that writes telemetry cannot leak into one that reads it.
 """
 
 import pytest
-
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 from app.story_engine.spatial import (
     SpatialStore,
@@ -57,9 +56,9 @@ def test_every_node_carries_a_province(store):
 def test_resolve_position_snaps_to_the_station_it_is_given(store):
     for waypoint in PRETORIA_TO_CAPE_TOWN:
         resolved = store.resolve_position(waypoint.latitude, waypoint.longitude)
-        assert resolved.nearest_waypoint_id == waypoint.id, (
-            f"{waypoint.name} resolved to {resolved.nearest_waypoint_name}"
-        )
+        assert (
+            resolved.nearest_waypoint_id == waypoint.id
+        ), f"{waypoint.name} resolved to {resolved.nearest_waypoint_name}"
         assert resolved.distance_to_corridor_m < 1.0
 
 
@@ -74,8 +73,10 @@ def test_resolve_position_preserves_lat_lon_orientation(store):
 
 
 def test_resolve_position_progress_is_monotonic_along_the_corridor(store):
-    fractions = [store.resolve_position(w.latitude, w.longitude).progress_fraction
-                 for w in PRETORIA_TO_CAPE_TOWN]
+    fractions = [
+        store.resolve_position(w.latitude, w.longitude).progress_fraction
+        for w in PRETORIA_TO_CAPE_TOWN
+    ]
     assert fractions == sorted(fractions)
     assert fractions[0] == pytest.approx(0.0, abs=0.01)
     assert fractions[-1] == pytest.approx(1.0, abs=0.01)
@@ -114,8 +115,9 @@ def test_corridor_geometry_payload_is_frontend_ready(store):
     assert geometry["corridor_id"] == "pretoria_cape_town"
     # MapLibre wants [longitude, latitude] pairs.
     first = geometry["coordinates"][0]
-    assert first == pytest.approx([PRETORIA_TO_CAPE_TOWN[0].longitude,
-                                   PRETORIA_TO_CAPE_TOWN[0].latitude])
+    assert first == pytest.approx(
+        [PRETORIA_TO_CAPE_TOWN[0].longitude, PRETORIA_TO_CAPE_TOWN[0].latitude]
+    )
     assert len(geometry["coordinates"]) == len(PRETORIA_TO_CAPE_TOWN)
     assert all("province" in node for node in geometry["nodes"])
 
@@ -194,8 +196,8 @@ def test_project_on_segment_returns_latitude_before_longitude():
     # getting it wrong produces a valid-looking point on the wrong side of
     # the country rather than an error.
     _, _, lat, lon = _project_on_segment(1.0, 1.0, 0.0, 0.0, 2.0, 0.0)
-    assert lat == pytest.approx(0.0, abs=0.001)   # the segment is on the equator
-    assert lon == pytest.approx(1.0, abs=0.001)   # the projection is halfway east
+    assert lat == pytest.approx(0.0, abs=0.001)  # the segment is on the equator
+    assert lon == pytest.approx(1.0, abs=0.001)  # the projection is halfway east
 
 
 def test_project_on_segment_clamps_beyond_the_ends():

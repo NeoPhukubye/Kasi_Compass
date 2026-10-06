@@ -6,12 +6,12 @@ Run with: pytest backend/tests/test_live_share.py
 
 import math
 
+from app.story_engine.geofence import haversine_meters
 from app.story_engine.live_share import (
     LivePositionStore,
     fuzz_coordinate,
     is_valid_rider_id,
 )
-from app.story_engine.geofence import haversine_meters
 
 VALID_UUID = "11111111-2222-3333-4444-555555555555"
 OTHER_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"

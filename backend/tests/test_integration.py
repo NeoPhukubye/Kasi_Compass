@@ -11,13 +11,11 @@ individually correct.
 Run with: pytest backend/tests/test_integration.py
 """
 
-from fastapi.testclient import TestClient
-
 import pytest
-
 from app.story_engine.api import app
 from app.story_engine.memories import memory_store
 from app.story_engine.route import get_waypoint
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -125,6 +123,8 @@ def test_share_position_rejects_non_uuid_rider_id():
         json={"rider_id": "not-a-uuid", "lat": -30.0, "lon": 24.0},
     )
     assert response.status_code == 422
+
+
 # A 36-character string that is the right *length* but not UUID-shaped must
 # still be rejected — previously a length-only constraint let it through to
 # the store before is_valid_rider_id caught it.
@@ -141,11 +141,13 @@ def test_share_position_rejects_36_char_non_uuid_rider_id():
     )
     assert response.status_code == 422
 
+
 def test_shared_positions_rejects_36_char_non_uuid_rider_id():
     response = client.get(
         "/journey/shared-positions", params={"rider_id": MALFORMED_36_CHAR_RIDER_ID}
     )
     assert response.status_code == 422
+
 
 def test_leave_rejects_36_char_non_uuid_rider_id():
     response = client.post(
@@ -179,10 +181,12 @@ def test_leave_endpoint_removes_rider_from_shared_positions():
     rider_ids = [p["rider_id"] for p in seen_by_b.json()]
     assert RIDER_A not in rider_ids
 
+
 # ---------------------------------------------------------------------
 # Rider memories — "new generation creates new memories, older generation
 # relives old ones" — end-to-end through the actual API.
 # ---------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def empty_memory_store():
@@ -219,8 +223,12 @@ def test_create_memory_then_relive_it_for_the_waypoint():
 
 
 def test_list_memories_is_newest_first_and_filters_by_waypoint():
-    client.post("/journey/memories", json={"rider_id": RIDER_A, "waypoint_id": "kimberley", "text": "first"})
-    client.post("/journey/memories", json={"rider_id": RIDER_B, "waypoint_id": "de_aar", "text": "karoo"})
+    client.post(
+        "/journey/memories", json={"rider_id": RIDER_A, "waypoint_id": "kimberley", "text": "first"}
+    )
+    client.post(
+        "/journey/memories", json={"rider_id": RIDER_B, "waypoint_id": "de_aar", "text": "karoo"}
+    )
 
     all_memories = client.get("/journey/memories")
     assert [m["text"] for m in all_memories.json()] == ["karoo", "first"]
@@ -292,7 +300,10 @@ def test_create_and_unlock_a_coordinate_tagged_memory():
 
 
 def test_nearby_memories_ignores_untagged_memories():
-    client.post("/journey/memories", json={"rider_id": RIDER_A, "waypoint_id": "kimberley", "text": "no pin"})
+    client.post(
+        "/journey/memories",
+        json={"rider_id": RIDER_A, "waypoint_id": "kimberley", "text": "no pin"},
+    )
     nearby = client.get(
         "/journey/memories/nearby",
         params={"lat": -28.7353, "lon": 24.7697, "radius": 5000.0},
@@ -325,14 +336,21 @@ def test_create_memory_echoes_audio_url_and_rejects_invalid_one():
 
     response = client.post(
         "/journey/memories",
-        json={"rider_id": RIDER_A, "waypoint_id": "kimberley", "text": "bad", "audio_url": "file:///etc/passwd"},
+        json={
+            "rider_id": RIDER_A,
+            "waypoint_id": "kimberley",
+            "text": "bad",
+            "audio_url": "file:///etc/passwd",
+        },
     )
     assert response.status_code == 422
+
 
 # ---------------------------------------------------------------------
 # Stop discovery + geofence verification (/story-engine) — the CLI and
 # frontend surfaces for looking up a stop and checking live telemetry.
 # ---------------------------------------------------------------------
+
 
 def test_stop_discovery_returns_narrative_sites_stalls_and_coordinates():
     response = client.get("/story-engine/stop/kimberley")
@@ -396,11 +414,15 @@ def test_geofence_verify_rejects_invalid_coordinates_and_radius():
     zero_radius = client.get(
         "/story-engine/geofence/verify",
         params={
-            "user_lat": -28.7, "user_lon": 24.7,
-            "target_lat": -28.7, "target_lon": 24.7, "radius": 0,
+            "user_lat": -28.7,
+            "user_lon": 24.7,
+            "target_lat": -28.7,
+            "target_lon": 24.7,
+            "radius": 0,
         },
     )
     assert zero_radius.status_code == 422
+
 
 def test_route_guide_answers_from_corpus_without_ai_key():
     response = client.post("/story-engine/ask", json={"question": "What happened at Kimberley?"})
@@ -438,4 +460,7 @@ def test_story_source_is_the_contributor_not_the_reviewer():
     body = response.json()
     # The seeded story's contributor is the heritage-site partner, not the
     # pending reviewer — story_source must never be the reviewer attribution.
-    assert body["story_source"] == "Kimberley Big Hole & Diamond Museum (pilot partner outreach pending)"
+    assert (
+        body["story_source"]
+        == "Kimberley Big Hole & Diamond Museum (pilot partner outreach pending)"
+    )

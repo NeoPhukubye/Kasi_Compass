@@ -8,8 +8,8 @@ journey that keeps reporting itself from the corridor, and a tracking link
 a family member can open without an app.
 """
 
+import app.story_engine.spatial as spatial_module
 import pytest
-
 from app.story_engine.eta import compute_eta
 from app.story_engine.journey import (
     GUARDIAN_TOKEN_PATTERN,
@@ -24,7 +24,6 @@ from app.story_engine.tickets import (
     is_valid_reference,
     normalize_reference,
 )
-import app.story_engine.spatial as spatial_module
 
 JOURNEY_A = "11111111-1111-4111-8111-111111111111"
 JOURNEY_B = "22222222-2222-4222-8222-222222222222"
@@ -54,6 +53,7 @@ def registry(store):
 # Journey ids and tokens
 # ---------------------------------------------------------------------
 
+
 def test_journey_id_must_be_uuid_shaped():
     assert is_valid_journey_id(JOURNEY_A)
     assert not is_valid_journey_id("not-a-uuid")
@@ -72,6 +72,7 @@ def test_generated_guardian_tokens_are_url_safe_and_distinct():
 # ---------------------------------------------------------------------
 # Journeys
 # ---------------------------------------------------------------------
+
 
 def test_create_journey_rejects_a_non_uuid_id(registry):
     with pytest.raises(ValueError):
@@ -135,6 +136,7 @@ def test_eta_for_a_journey_that_never_reported_says_waiting(registry):
 # Guardian links
 # ---------------------------------------------------------------------
 
+
 def test_issuing_a_link_for_an_unknown_journey_raises(registry):
     with pytest.raises(ValueError):
         registry.issue_link(JOURNEY_A)
@@ -152,7 +154,12 @@ def test_a_link_carries_no_identity_beyond_its_display_label(registry):
     assert link.as_dict()["display_name"] == "Ada's journey"
     # Nothing else in the payload identifies a person, a device or a session.
     assert set(link.as_dict()) == {
-        "token", "journey_id", "created_at", "revoked", "label", "display_name",
+        "token",
+        "journey_id",
+        "created_at",
+        "revoked",
+        "label",
+        "display_name",
     }
 
 
@@ -231,6 +238,7 @@ def test_family_view_for_an_unstarted_journey_still_renders(registry):
 # ---------------------------------------------------------------------
 # Ticket validation
 # ---------------------------------------------------------------------
+
 
 def test_reference_normalisation_is_forgiving():
     # People type these off a screenshot. A missing or lowercase space must

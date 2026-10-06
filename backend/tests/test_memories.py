@@ -5,11 +5,10 @@ Run with: pytest backend/tests/test_memories.py
 """
 
 from app.story_engine.memories import (
-    MAX_MEMORIES,
     MAX_MEMORY_TEXT_LENGTH,
+    VALID_WAYPOINT_IDS,
     Memory,
     MemoryStore,
-    VALID_WAYPOINT_IDS,
 )
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
@@ -18,7 +17,7 @@ OTHER_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 
 def test_valid_waypoint_ids_cover_every_route_waypoint():
-    assert VALID_WAYPOINT_IDS == {w.id for w in PRETORIA_TO_CAPE_TOWN}
+    assert {w.id for w in PRETORIA_TO_CAPE_TOWN} == VALID_WAYPOINT_IDS
 
 
 def test_add_memory_returns_a_memory_with_id_and_timestamp():
@@ -171,7 +170,9 @@ def test_add_memory_rejects_non_http_audio_url():
 
 def test_memories_near_returns_only_geofenced():
     store = MemoryStore()
-    store.add_memory("kimberley", VALID_UUID, "at the Big Hole", lat=-28.7353, lon=24.7697, now=1000.0)
+    store.add_memory(
+        "kimberley", VALID_UUID, "at the Big Hole", lat=-28.7353, lon=24.7697, now=1000.0
+    )
     store.add_memory("kimberley", OTHER_UUID, "untagged memory", now=1001.0)
     store.add_memory("kimberley", VALID_UUID, "two km away", lat=-28.7553, lon=24.7697, now=1002.0)
 

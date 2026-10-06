@@ -12,7 +12,6 @@ Run with: pytest backend/tests/test_guide.py
 """
 
 import pytest
-
 from app.story_engine import guide
 
 
@@ -51,7 +50,8 @@ def test_answer_without_key_is_purely_corpus():
 
 def test_answer_with_key_uses_gemini_draft(monkeypatch):
     monkeypatch.setattr(
-        guide, "_call_gemini",
+        guide,
+        "_call_gemini",
         lambda question, context, api_key, model: "Kimberley's diamond rush shaped the town.",
     )
     result = guide.answer_question("What happened at kimberley?", api_key="FAKE-KEY")

@@ -59,12 +59,12 @@ def test_runtime_api_does_not_import_the_ai_tool():
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module)
 
-    assert not any("translate_stories" in name for name in imported), (
-        f"api.py must not import the AI translation tool; found: {imported}"
-    )
-    assert not any("google" in name.lower() for name in imported), (
-        f"api.py must not import a Google/AI SDK; found: {imported}"
-    )
+    assert not any(
+        "translate_stories" in name for name in imported
+    ), f"api.py must not import the AI translation tool; found: {imported}"
+    assert not any(
+        "google" in name.lower() for name in imported
+    ), f"api.py must not import a Google/AI SDK; found: {imported}"
 
 
 def test_tool_does_not_import_google_sdk_at_module_level():
@@ -224,6 +224,6 @@ def test_stories_only_record_human_reviewers():
 
     for waypoint_id, entry in STORY_CONTENT.items():
         for language_code, story in entry.localized.items():
-            assert "AI" not in story.reviewed_by.replace("awaiting", ""), (
-                f"{waypoint_id}/{language_code} has an AI attribution in reviewed_by"
-            )
+            assert "AI" not in story.reviewed_by.replace(
+                "awaiting", ""
+            ), f"{waypoint_id}/{language_code} has an AI attribution in reviewed_by"

@@ -6,8 +6,8 @@ Run with: pytest backend/tests/test_content_store.py
 """
 
 from app.story_engine.content_store import (
-    PointOfInterest,
     SHOSHOLOZA_ROUTE_STORIES,
+    PointOfInterest,
     get_pois,
     get_stop_content,
     get_story,

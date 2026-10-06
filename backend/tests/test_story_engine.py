@@ -37,9 +37,12 @@ def test_get_waypoint_found_and_not_found():
 def test_haversine_pretoria_to_cape_town_is_roughly_correct():
     pretoria = get_waypoint("pretoria")
     cape_town = get_waypoint("cape_town")
-    distance_km = haversine_meters(
-        pretoria.latitude, pretoria.longitude, cape_town.latitude, cape_town.longitude
-    ) / 1000
+    distance_km = (
+        haversine_meters(
+            pretoria.latitude, pretoria.longitude, cape_town.latitude, cape_town.longitude
+        )
+        / 1000
+    )
     # Straight-line distance is shorter than the ~1,600km rail distance
     # (which winds through Kimberley and the Karoo) - expect roughly 1,200km.
     assert 1100 < distance_km < 1350
@@ -91,10 +94,17 @@ def test_check_geofence_inside_and_outside_radius():
     assert check_geofence(-28.7353, 24.7697, -28.7353, 24.7697, radius_meters=100.0) is True
     assert check_geofence(-28.7353, 24.7697, -28.7353 + 0.01, 24.7697, radius_meters=100.0) is False
     # A generous radius catches the same offset point.
-    assert check_geofence(-28.7353, 24.7697, -28.7353 + 0.01, 24.7697, radius_meters=2_000.0) is True
+    assert (
+        check_geofence(-28.7353, 24.7697, -28.7353 + 0.01, 24.7697, radius_meters=2_000.0) is True
+    )
+
 
 def test_check_geofence_defaults_to_100m_bundle_radius():
     kimberley = get_waypoint("kimberley")
     # ~0.002deg latitude is ~223m — outside the 100m default radius.
-    assert check_geofence(kimberley.latitude, kimberley.longitude,
-                          kimberley.latitude + 0.002, kimberley.longitude) is False
+    assert (
+        check_geofence(
+            kimberley.latitude, kimberley.longitude, kimberley.latitude + 0.002, kimberley.longitude
+        )
+        is False
+    )

@@ -9,8 +9,8 @@ A stopped train and a dead telemetry feed both yield "no ETA", because
 inventing one is the exact failure mode this product exists to eliminate.
 """
 
+import app.story_engine.spatial as spatial_module
 import pytest
-
 from app.story_engine.eta import (
     SCHEDULED_SPEED_KMH,
     STALE_TELEMETRY_SECONDS,
@@ -20,7 +20,6 @@ from app.story_engine.eta import (
     simulate_corridor_run,
 )
 from app.story_engine.spatial import SpatialStore, TelemetryPoint
-import app.story_engine.spatial as spatial_module
 
 
 @pytest.fixture()
@@ -158,8 +157,14 @@ def test_milestones_include_every_station_and_every_province(store):
 
     # The origin reads as "Departed X" rather than a bare station name,
     # because leaving is the event a family actually cares about.
-    for expected in ("Departed Pretoria", "Kimberley", "Cape Town", "De Aar",
-                     "Worcester", "Matjiesfontein"):
+    for expected in (
+        "Departed Pretoria",
+        "Kimberley",
+        "Cape Town",
+        "De Aar",
+        "Worcester",
+        "Matjiesfontein",
+    ):
         assert expected in labels, f"{expected} missing from milestones"
 
     provinces = {m.label for m in build_milestones(position) if m.kind == "province_entry"}
@@ -210,4 +215,11 @@ def test_eta_serialises_to_a_json_safe_payload(store):
     # The family page renders this directly; a datetime object here would
     # blow up the response with a 500 rather than a useful error.
     assert json.loads(json.dumps(payload))["journey_id"] == "json-1"
-    assert set(payload["eta"]) == {"next_station", "next_station_at", "next_station_in", "arrival_station", "arrival_at", "arrival_in"}
+    assert set(payload["eta"]) == {
+        "next_station",
+        "next_station_at",
+        "next_station_in",
+        "arrival_station",
+        "arrival_at",
+        "arrival_in",
+    }
