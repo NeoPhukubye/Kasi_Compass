@@ -78,9 +78,14 @@ def companion_chat(request: CompanionChatRequest) -> CompanionChatResponse:
             model=DEFAULT_MODEL,
             contents=full_prompt,
         )
-        return CompanionChatResponse(status="success", reply=response.text)
-    except Exception as exc:
+        return CompanionChatResponse(status="success", reply=response.text or "")
+    except genai.errors.APIError as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"AI guide generation failed: {str(exc)}",
+            detail=f"AI guide generation failed: {exc!s}",
+        ) from exc
+    except Exception as exc:  # pragma: no cover - unexpected errors
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI guide generation failed unexpectedly: {exc!s}",
         ) from exc
