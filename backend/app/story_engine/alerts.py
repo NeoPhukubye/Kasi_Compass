@@ -15,19 +15,19 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
+from enum import StrEnum
+from typing import Any, TypedDict
 
 
-class AlertSeverity(str, Enum):
+class AlertSeverity(StrEnum):
     """Severity levels for railway alerts."""
 
-    INFO = "info"           # Planned works, minor notices
-    WARNING = "warning"     # Delays, speed restrictions
-    CRITICAL = "critical"   # Cancellations, line blockages, rail moved
+    INFO = "info"  # Planned works, minor notices
+    WARNING = "warning"  # Delays, speed restrictions
+    CRITICAL = "critical"  # Cancellations, line blockages, rail moved
 
 
-class AlertCategory(str, Enum):
+class AlertCategory(StrEnum):
     """Categories of railway alerts."""
 
     DELAY = "delay"
@@ -40,6 +40,13 @@ class AlertCategory(str, Enum):
     SERVICE_DISRUPTION = "service_disruption"
     WEATHER = "weather"
     OTHER = "other"
+
+
+class AlertTemplate(TypedDict):
+    category: AlertCategory
+    severity: AlertSeverity
+    title: str
+    message: str
 
 
 @dataclass(frozen=True)
@@ -78,9 +85,7 @@ class Alert:
 
     def is_active(self, now: float | None = None) -> bool:
         now = now if now is not None else time.time()
-        if self.expires_at is not None and now > self.expires_at:
-            return False
-        return True
+        return self.expires_at is None or now <= self.expires_at
 
 
 # In-memory store for alerts (in production, persist to database)
@@ -227,7 +232,7 @@ def delete_alert(alert_id: str) -> bool:
 
 
 # Predefined alert templates for common scenarios
-ALERT_TEMPLATES = {
+ALERT_TEMPLATES: dict[str, AlertTemplate] = {
     "rail_moved": {
         "category": AlertCategory.RAIL_MOVED,
         "severity": AlertSeverity.CRITICAL,
@@ -327,6 +332,7 @@ def get_active_alert_count(corridor_id: str, now: float | None = None) -> dict[s
 # subscription is removed.
 # ---------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class AlertSubscription:
     """A passenger's subscription to railway alerts for a specific journey."""
@@ -341,7 +347,9 @@ class AlertSubscription:
     subscribed_at: float
     last_notified_at: float | None = None
     is_active: bool = True
-    notification_preferences: dict = field(default_factory=dict)  # e.g., {"push": true, "sms": false}
+    notification_preferences: dict = field(
+        default_factory=dict
+    )  # e.g., {"push": true, "sms": false}
 
     def as_dict(self) -> dict:
         return {
@@ -431,7 +439,11 @@ def get_subscription_by_ticket(ticket_id: str) -> AlertSubscription | None:
 def get_subscription_by_journey(journey_id: str) -> list[AlertSubscription]:
     """Get all active subscriptions for a journey."""
     sub_ids = _journey_subscriptions.get(journey_id, set())
-    return [_subscriptions[sid] for sid in sub_ids if sid in _subscriptions and _subscriptions[sid].is_active]
+    return [
+        _subscriptions[sid]
+        for sid in sub_ids
+        if sid in _subscriptions and _subscriptions[sid].is_active
+    ]
 
 
 def deactivate_subscription(ticket_id: str, now: float | None = None) -> AlertSubscription | None:
@@ -442,9 +454,7 @@ def deactivate_subscription(ticket_id: str, now: float | None = None) -> AlertSu
         return None
     sub = _subscriptions[sub_id]
     _unindex_subscription(sub)
-    updated = AlertSubscription(
-        **{**sub.__dict__, "is_active": False, "last_notified_at": now}
-    )
+    updated = AlertSubscription(**{**sub.__dict__, "is_active": False, "last_notified_at": now})
     _subscriptions[sub_id] = updated
     return updated
 
@@ -461,7 +471,9 @@ def get_relevant_alerts_for_subscription(
     return get_alerts_for_journey(sub.journey_id or "", sub.corridor_id, include_expired, now)
 
 
-def mark_subscription_notified(subscription_id: str, now: float | None = None) -> AlertSubscription | None:
+def mark_subscription_notified(
+    subscription_id: str, now: float | None = None
+) -> AlertSubscription | None:
     """Update last_notified_at for a subscription."""
     now = now if now is not None else time.time()
     sub = _subscriptions.get(subscription_id)
