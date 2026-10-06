@@ -49,7 +49,8 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.story_engine.content_store import STORY_CONTENT  # noqa: E402
+# ruff: noqa: E402
+from app.story_engine.content_store import STORY_CONTENT
 
 DRAFTS_DIR = Path(__file__).resolve().parent / "translation_drafts"
 
@@ -231,7 +232,6 @@ def apply_draft(draft_path: Path, reviewer: str) -> str:
     _reject_ai_reviewer(reviewer)
 
     draft = json.loads(draft_path.read_text(encoding="utf-8"))
-    waypoint_id = draft["waypoint_id"]
     language_code = draft["language_code"]
     text = draft["draft_text"]
 
@@ -244,11 +244,11 @@ def apply_draft(draft_path: Path, reviewer: str) -> str:
     return (
         f'            "{language_code}": LocalizedStory(\n'
         f'                language_code="{language_code}",\n'
-        f'                text=(\n'
-        f'                    {text!r}\n'
-        f'                ),\n'
+        f"                text=(\n"
+        f"                    {text!r}\n"
+        f"                ),\n"
         f'                reviewed_by="{reviewer}",\n'
-        f'            ),\n'
+        f"            ),\n"
     )
 
 
