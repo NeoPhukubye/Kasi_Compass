@@ -29,10 +29,35 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import TypedDict
 
 from app.story_engine import spatial
 from app.story_engine.geofence import haversine_meters
-from app.story_engine.route import PRETORIA_TO_CAPE_TOWN, Waypoint
+from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
+from app.story_engine.spatial import TelemetryPoint
+
+
+class PassportStampDict(TypedDict):
+    waypoint_id: str
+    name: str
+    province: str
+    stamped_at: float
+    distance_meters: float
+    source: str
+    ordinal: int
+
+
+class PassportDict(TypedDict):
+    journey_id: str
+    issued_at: float
+    stamps: list[PassportStampDict]
+    stamps_earned: int
+    stamps_total: int
+    completion: float
+    provinces_visited: list[str]
+    complete: bool
+    coverage_note: str
+
 
 # How close a journey's reported position must be to a station for that
 # station to count as reached. Wider than the story trigger radius (5km),
@@ -76,7 +101,7 @@ def _route_order() -> dict[str, int]:
     return {w.id: index for index, w in enumerate(PRETORIA_TO_CAPE_TOWN)}
 
 
-def build_passport(journey_id: str, now: float | None = None) -> dict:
+def build_passport(journey_id: str, now: float | None = None) -> PassportDict:
     """
     Compute the passport for a journey from its persisted position history.
 
@@ -84,13 +109,11 @@ def build_passport(journey_id: str, now: float | None = None) -> dict:
     corridor, so the UI can show "6 of 8 stops" without a second request.
     """
     now = now if now is not None else time.time()
-    points = spatial.spatial_store.recent_telemetry(
-        journey_id, limit=MAX_TELEMETRY_POINTS_SCANNED
-    )
+    points = spatial.spatial_store.recent_telemetry(journey_id, limit=MAX_TELEMETRY_POINTS_SCANNED)
 
     # Closest approach to every station across the whole feed, kept as
     # (distance, point) so a stamp can cite the report that justified it.
-    best: dict[str, tuple[float, object]] = {}
+    best: dict[str, tuple[float, TelemetryPoint]] = {}
     for point in points:
         for waypoint in PRETORIA_TO_CAPE_TOWN:
             distance = haversine_meters(
@@ -120,7 +143,7 @@ def build_passport(journey_id: str, now: float | None = None) -> dict:
         )
 
     total = len(PRETORIA_TO_CAPE_TOWN)
-    provinces = []
+    provinces: list[str] = []
     for stamp in stamps:
         if stamp.province and (not provinces or provinces[-1] != stamp.province):
             provinces.append(stamp.province)
@@ -145,7 +168,9 @@ def build_passport(journey_id: str, now: float | None = None) -> dict:
                 "A stamp is only issued against a corridor position report."
             )
         else:
-            coverage_note = "Every station up to the last stamped one is backed by a corridor position report."
+            coverage_note = (
+                "Every station up to the last stamped one is backed by a corridor position report."
+            )
 
     return {
         "journey_id": journey_id,
@@ -160,9 +185,10 @@ def build_passport(journey_id: str, now: float | None = None) -> dict:
     }
 
 
-def stamp_for_waypoint(journey_id: str, waypoint_id: str) -> dict | None:
+def stamp_for_waypoint(journey_id: str, waypoint_id: str) -> dict[str, object] | None:
     """The passport's stamp for one station, or None if not reached."""
-    for stamp in build_passport(journey_id)["stamps"]:
+    passport_data = build_passport(journey_id)
+    for stamp in passport_data["stamps"]:
         if stamp["waypoint_id"] == waypoint_id:
             return stamp
     return None
