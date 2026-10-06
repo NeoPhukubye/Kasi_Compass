@@ -229,9 +229,19 @@ class SpatialStore:
             try:
                 self._conn = self._connect_postgis(self._dsn)
                 self._driver = "postgis"
-            except Exception:
+            except ImportError:
+                # psycopg not installed
                 self._conn = None
                 self._dsn = None
+            except OSError as exc:  # pragma: no cover - fallback on connection failure
+                # Connection failed (e.g., database unreachable) — fall back to SQLite
+                self._conn = None
+                self._dsn = None
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "PostGIS connection failed, falling back to SQLite: %s", exc
+                )
         if self._conn is None:
             self._conn = self._connect_sqlite(self._sqlite_path)
             self._driver = "sqlite"
@@ -535,7 +545,9 @@ class SpatialStore:
         for index, row in enumerate(rows):
             if index > 0:
                 previous = nodes[-1]
-                cumulative += haversine_km(previous.latitude, previous.longitude, row["lat"], row["lon"])
+                cumulative += haversine_km(
+                    previous.latitude, previous.longitude, row["lat"], row["lon"]
+                )
             nodes.append(
                 CorridorNode(
                     waypoint_id=row["waypoint_id"],
@@ -843,8 +855,9 @@ class SpatialStore:
         journey_telemetry; this is the identity that links them together."""
         self.connect()
         import json
+
         pickup_contacts_json = json.dumps(journey.get("pickup_contacts", []))
-        
+
         if self._driver == "postgis":
             self._conn.execute(  # type: ignore[attr-defined]
                 """
@@ -939,6 +952,7 @@ class SpatialStore:
             """
         ).fetchall()
         import json
+
         result = []
         for row in rows:
             pickup_contacts = []
@@ -951,7 +965,7 @@ class SpatialStore:
                         pickup_contacts = []
                 else:
                     pickup_contacts = pc_raw
-            
+
             journey = {
                 "journey_id": row["journey_id"],
                 "corridor_id": row["corridor_id"],
@@ -965,7 +979,9 @@ class SpatialStore:
                 "guardian_contact_phone": row["guardian_contact_phone"] or "",
                 "pickup_contacts": pickup_contacts,
                 "arrival_handshake_completed": bool(row["arrival_handshake_completed"]),
-                "handshake_completed_at": float(row["handshake_completed_at"]) if row["handshake_completed_at"] else None,
+                "handshake_completed_at": float(row["handshake_completed_at"])
+                if row["handshake_completed_at"]
+                else None,
             }
             result.append(journey)
         return result
@@ -1040,7 +1056,7 @@ class SpatialStore:
             "UPDATE guardian_links SET revoked = 1 WHERE token = ?", (token,)
         )
         self._conn.commit()  # type: ignore[attr-defined]
-        return cursor.rowcount > 0
+        return bool(cursor.rowcount) > 0
 
     @staticmethod
     def _link_row_to_dict(row) -> dict:

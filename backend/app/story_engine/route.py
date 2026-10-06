@@ -22,6 +22,7 @@ cannot be described differently in three places.
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 # Shared geospatial constants — defined once here so geofence.py and
@@ -108,9 +109,15 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
         province="Free State",
         cultural=CulturalMetadata(
             summary="The judicial capital of South Africa, in the middle of the Free State. Known for its rose-growing industry and the Naval Hill viewpoint.",
-            heritage_sites=("National Women's Monument", "Naval Hill", "Bloemfontein National Museum"),
+            heritage_sites=(
+                "National Women's Monument",
+                "Naval Hill",
+                "Bloemfontein National Museum",
+            ),
             cultural_touchpoints=("Free State Zulu Community", "Rose Valley Festival"),
-            indigenous_stories=("The Free State's role in the Anglo-Boer War and the story of the Basotho people.",),
+            indigenous_stories=(
+                "The Free State's role in the Anglo-Boer War and the story of the Basotho people.",
+            ),
             local_cuisine=("Potjiekos and braai from the surrounding townships",),
             festivals=("Bloemfontein Rose Festival, every October",),
             visitor_notes="Naval Hill offers a panoramic view of the city and is home to a small game reserve.",
@@ -165,7 +172,9 @@ PRETORIA_TO_CAPE_TOWN: list[Waypoint] = [
 # the Karoo" milestone that the Journey Guardian pushes to a family link.
 CORRIDOR_PROVINCES: list[str] = []
 for _waypoint in PRETORIA_TO_CAPE_TOWN:
-    if _waypoint.province and (not CORRIDOR_PROVINCES or CORRIDOR_PROVINCES[-1] != _waypoint.province):
+    if _waypoint.province and (
+        not CORRIDOR_PROVINCES or CORRIDOR_PROVINCES[-1] != _waypoint.province
+    ):
         CORRIDOR_PROVINCES.append(_waypoint.province)
 
 
