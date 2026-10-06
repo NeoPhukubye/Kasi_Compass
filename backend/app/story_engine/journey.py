@@ -109,7 +109,9 @@ class Journey:
     minor_name: str = ""
     minor_age: int = 0
     guardian_contact_phone: str = ""
-    pickup_contacts: list[dict] = field(default_factory=list)  # list of {contact_id, name, phone, relation, verified_at}
+    pickup_contacts: list[dict] = field(
+        default_factory=list
+    )  # list of {contact_id, name, phone, relation, verified_at}
     arrival_handshake_completed: bool = False
     handshake_completed_at: float | None = None
 
@@ -121,7 +123,9 @@ class Journey:
             "destination_waypoint_id": self.destination_waypoint_id,
             "created_at": self.created_at,
             "ticket_id": self.ticket_id,
-            "guardian_link_count": sum(1 for link in self.guardian_links.values() if not link.revoked),
+            "guardian_link_count": sum(
+                1 for link in self.guardian_links.values() if not link.revoked
+            ),
             "is_minor_journey": self.is_minor_journey,
             "minor_name": self.minor_name,
             "minor_age": self.minor_age,
@@ -190,9 +194,9 @@ class JourneyRegistry:
                 display_name=record["display_name"],
             )
             self._links[link.token] = link
-            journey = self._journeys.get(link.journey_id)
-            if journey is not None and not link.revoked:
-                journey.guardian_links[link.token] = link
+            linked_journey = self._journeys.get(link.journey_id)
+            if linked_journey is not None and not link.revoked:
+                linked_journey.guardian_links[link.token] = link
 
     # ------------------------------------------------------------------
     # Journeys
@@ -350,9 +354,10 @@ class JourneyRegistry:
             raise ValueError(f"unknown journey_id: {journey_id!r}")
         if not journey.is_minor_journey:
             raise ValueError("Journey is not marked for minor travel")
-        
+
         now = now if now is not None else time.time()
         import secrets
+
         verification_code = f"{secrets.randbelow(900000) + 100000:06d}"
         contact = {
             "contact_id": secrets.token_urlsafe(8),
@@ -380,15 +385,17 @@ class JourneyRegistry:
             raise ValueError(f"unknown journey_id: {journey_id!r}")
         if not journey.is_minor_journey:
             raise ValueError("Journey is not marked for minor travel")
-        
+
         now = now if now is not None else time.time()
-        contact = next((pc for pc in journey.pickup_contacts if pc["contact_id"] == contact_id), None)
+        contact = next(
+            (pc for pc in journey.pickup_contacts if pc["contact_id"] == contact_id), None
+        )
         if contact is None:
             raise ValueError("Pickup contact not found")
-        
+
         if contact["verification_code"] != verification_code:
             return False
-        
+
         contact["verified_at"] = now
         journey.arrival_handshake_completed = True
         journey.handshake_completed_at = now
@@ -455,7 +462,14 @@ class JourneyRegistry:
                 "position": None,
                 "observed_speed_kmh": 0.0,
                 "speed_source": "insufficient",
-                "eta": {"next_station": None, "next_station_at": None, "next_station_in": None, "arrival_station": None, "arrival_at": None, "arrival_in": None},
+                "eta": {
+                    "next_station": None,
+                    "next_station_at": None,
+                    "next_station_in": None,
+                    "arrival_station": None,
+                    "arrival_at": None,
+                    "arrival_in": None,
+                },
                 "delay_hours": 0.0,
                 "delay_display": "Waiting for the first corridor report",
                 "province": "",

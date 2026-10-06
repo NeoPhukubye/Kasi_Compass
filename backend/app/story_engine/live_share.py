@@ -36,6 +36,7 @@ import math
 import re
 import time
 from dataclasses import dataclass
+
 from app.story_engine.route import METERS_PER_DEGREE_LATITUDE
 
 RIDER_ID_PATTERN = re.compile(
@@ -55,15 +56,15 @@ POSITION_TTL_SECONDS = 45.0
 FUZZ_PRECISION_METERS = 150.0
 
 
-
-
 def is_valid_rider_id(rider_id: str) -> bool:
     """Rider ids must be UUID-shaped — an opaque, client-generated token,
     never a name, session id, or anything else that could carry meaning."""
     return bool(RIDER_ID_PATTERN.match(rider_id))
 
 
-def fuzz_coordinate(lat: float, lon: float, precision_meters: float = FUZZ_PRECISION_METERS) -> tuple[float, float]:
+def fuzz_coordinate(
+    lat: float, lon: float, precision_meters: float = FUZZ_PRECISION_METERS
+) -> tuple[float, float]:
     """
     Snap a coordinate to the nearest `precision_meters` grid cell, rather
     than merely rounding decimal degrees (which distorts unevenly with
@@ -77,7 +78,9 @@ def fuzz_coordinate(lat: float, lon: float, precision_meters: float = FUZZ_PRECI
     # one — two nearby raw points that snap to the same latitude cell must
     # also get an identical longitude step, or they can round to adjacent
     # longitude cells near a boundary purely from float noise in `lat`.
-    lon_step_deg = precision_meters / (METERS_PER_DEGREE_LATITUDE * max(math.cos(math.radians(fuzzed_lat)), 1e-6))
+    lon_step_deg = precision_meters / (
+        METERS_PER_DEGREE_LATITUDE * max(math.cos(math.radians(fuzzed_lat)), 1e-6)
+    )
     fuzzed_lon = round(lon / lon_step_deg) * lon_step_deg
     return fuzzed_lat, fuzzed_lon
 
@@ -109,7 +112,9 @@ class LivePositionStore:
         for rider_id in expired:
             del self._positions[rider_id]
 
-    def share_position(self, rider_id: str, lat: float, lon: float, now: float | None = None) -> int:
+    def share_position(
+        self, rider_id: str, lat: float, lon: float, now: float | None = None
+    ) -> int:
         """Store a fuzzed position for rider_id, purge stale entries, and
         return the current count of active (non-expired) riders."""
         now = now if now is not None else time.time()

@@ -73,7 +73,7 @@ import uuid
 from dataclasses import dataclass
 
 from app.story_engine.geofence import haversine_meters
-from app.story_engine.live_share import RIDER_ID_PATTERN, is_valid_rider_id
+from app.story_engine.live_share import is_valid_rider_id
 from app.story_engine.route import PRETORIA_TO_CAPE_TOWN
 
 # A memory can only be attached to a waypoint that exists on the route.
@@ -170,7 +170,7 @@ class MemoryStore:
             raise ValueError(f"lon must be between -180 and 180, got {lon}")
 
         audio = audio_url.strip() if audio_url else None
-        if audio is not None and not (audio.startswith("http://") or audio.startswith("https://")):
+        if audio is not None and not audio.startswith(("http://", "https://")):
             raise ValueError("audio_url must be an absolute http(s) URL")
 
         memory = Memory(
@@ -193,11 +193,17 @@ class MemoryStore:
 
         return memory
 
-    def memories_for(self, waypoint_id: str | None = None, limit: int = DEFAULT_MEMORIES_LIMIT) -> list[Memory]:
+    def memories_for(
+        self, waypoint_id: str | None = None, limit: int = DEFAULT_MEMORIES_LIMIT
+    ) -> list[Memory]:
         """Return memories for a waypoint (or all waypoints if None),
         newest first, capped at `limit`."""
         newest_first = sorted(self._memories, key=lambda m: m.created_at, reverse=True)
-        filtered = newest_first if waypoint_id is None else [m for m in newest_first if m.waypoint_id == waypoint_id]
+        filtered = (
+            newest_first
+            if waypoint_id is None
+            else [m for m in newest_first if m.waypoint_id == waypoint_id]
+        )
         return filtered[:limit]
 
     def memories_near(

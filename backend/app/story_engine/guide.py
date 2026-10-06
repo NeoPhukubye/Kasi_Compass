@@ -98,7 +98,7 @@ def _corpus_answer(question: str, stop_id: str | None) -> str:
     stalls = [stall["name"] for stall in content["local_stalls"]]
 
     if not SHOSHOLOZA_ROUTE_STORIES.get(stop_id):
-        return (f"{content['stop_name']}: {narrative}.")
+        return f"{content['stop_name']}: {narrative}."
 
     lines = [f"{content['stop_name']}: {narrative}."]
     if heritage:
@@ -114,13 +114,15 @@ def _call_gemini(question: str, context: str, api_key: str, model: str) -> str:
     caller can fall back to the corpus answer."""
     payload = {
         "systemInstruction": {
-            "parts": [{
-                "text": (
-                    "You are the Kasi Compass route guide for the Shosholoza rail corridor. "
-                    "Answer the rider's question in 2-4 friendly sentences, grounded ONLY in "
-                    "the provided context. Do not invent stations, dates, or facts outside it."
-                ),
-            }],
+            "parts": [
+                {
+                    "text": (
+                        "You are the Kasi Compass route guide for the Shosholoza rail corridor. "
+                        "Answer the rider's question in 2-4 friendly sentences, grounded ONLY in "
+                        "the provided context. Do not invent stations, dates, or facts outside it."
+                    ),
+                }
+            ],
         },
         "contents": [{"parts": [{"text": f"Context:\n{context}\n\nQuestion: {question}"}]}],
         "generationConfig": {"temperature": 0.4, "maxOutputTokens": 300},

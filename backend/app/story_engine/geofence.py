@@ -25,10 +25,7 @@ def haversine_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> floa
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     d_phi = math.radians(lat2 - lat1)
     d_lambda = math.radians(lon2 - lon1)
-    a = (
-        math.sin(d_phi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
-    )
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
     return 2 * EARTH_RADIUS_METERS * math.asin(math.sqrt(a))
 
 
@@ -61,7 +58,6 @@ def nearest_waypoint(current_lat: float, current_lon: float) -> Waypoint:
     )
 
 
-
 def find_triggered_waypoint(
     current_lat: float,
     current_lon: float,
@@ -76,11 +72,13 @@ def find_triggered_waypoint(
     real inter-station distances, but possible near a dense cluster), the
     closest one wins.
     """
+
     def trigger_if_in_range(waypoint: Waypoint) -> StoryTrigger | None:
         distance = haversine_meters(current_lat, current_lon, waypoint.latitude, waypoint.longitude)
         if distance <= trigger_radius_meters:
             return StoryTrigger(waypoint=waypoint, distance_meters=distance)
         return None
+
     candidates = filter(None, (trigger_if_in_range(w) for w in PRETORIA_TO_CAPE_TOWN))
     return min(candidates, key=lambda c: c.distance_meters, default=None)
 
