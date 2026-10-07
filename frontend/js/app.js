@@ -711,6 +711,18 @@ async function showStopInsights(stopId, stopName, { resumable = false } = {}) {
         renderFoundItems(els.panelStallsList, data.local_stalls, 'stall', (stall) =>
             `${stall.name} [${stall.category}]: ${stall.description}`
         );
+
+        // The Time Machine renders the backend's per-era schematic reconstruction
+        // (see js/era-visual.js). Cache the era payload globally so the renderer
+        // can read it without a second round trip — and so a stop's era data is
+        // available the moment its panel opens.
+        window.KASI_ERA_DETAILS = window.KASI_ERA_DETAILS || {};
+        window.KASI_ERA_DETAILS[stopId] = data.era_details || {};
+        const eraVisual = document.getElementById('era-visual');
+        if (eraVisual && window.showEraVisual) {
+            eraVisual.classList.remove('hidden');
+            window.showEraVisual(stopId);
+        }
     } catch (err) {
         console.error('Failed to fetch stop details:', err);
         els.panelNarrative.textContent = 'Could not load stop insights. Is the backend running?';
