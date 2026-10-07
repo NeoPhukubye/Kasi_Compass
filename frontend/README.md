@@ -19,15 +19,29 @@ This app is designed to be easy to use for elderly people, on both cellphones an
 ```
 frontend/
   index.html              # Main entry point
+  track.html              # Family tracking page (read-only, link-token in the hash)
+  sw.js                   # Offline story-pack service worker (packs and GETs only)
   css/style.css           # Styles (elderly-friendly, responsive)
   js/geo.js               # Shared haversine + along-track progress interpolation
   js/api.js               # Backend API client
   js/map.js               # MapLibre map, route, markers, animation
   js/app.js               # Mode switching, GPS, story cards, large-print toggle
+  js/era-visual.js        # Station Time Machine schematic renderer
+  js/guardian.js          # Corridor feed, ETA panel, guardian links, Memory Vault
+  js/telkom-puzzle.js     # Telkom Tower sliding puzzle at Pretoria & Johannesburg
+  js/live-share.js        # Live position sharing between riders (opt-in)
+  js/zulzi.js             # Carriage-delivery pre-order UI
+  js/alerts.js            # Railway service alerts feed
+  js/offline.js           # Offline story-pack pre-caching
+  js/prasa.js             # PRASA timetable + live status (mock fallback)
+  js/track.js             # Family tracking view
+  js/config.js            # API base URL (overwritten by the deploy workflow)
 ```
 
 Note the script order in `index.html`: `geo.js` must load before `app.js`, since
-`app.js` calls `haversineMeters` and `alongTrackProgress` from it.
+`app.js` calls `haversineMeters` and `alongTrackProgress` from it. `era-visual.js`
+loads before `app.js` because `app.js` calls `window.showEraVisual` from the stop
+insights panel.
 
 ## Quick start
 
