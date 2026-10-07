@@ -19,28 +19,27 @@ let puzzleState = {
     startTime: null,
     timerInterval: null,
     isComplete: false,
+    keyHandler: null,
     onClose: null,
 };
 
-function createPuzzlePiece(index, totalPieces, size, imgSrc) {
-    const pieceSize = 100 / size.cols;
-    const row = Math.floor(index / size.cols);
-    const col = index % size.cols;
-    const bgPosX = -col * (100 / (size.cols - 1)) * (size.cols - 1) / (size.cols - 1) * 100 / (size.cols - 1); // This is wrong, let me recalculate
-    
-    // Correct background position calculation
-    const pieceWidthPercent = 100 / (size.cols - 1);
-    const pieceHeightPercent = 100 / (size.rows - 1);
-    
-    const x = col * pieceWidthPercent;
-    const y = row * pieceHeightPercent;
+function createPuzzlePiece(correctIndex, totalPieces, size, imgSrc) {
+    // The background image is sized to cover the whole grid
+    // (background-size = cols*100% rows*100%), so the piece that belongs at
+    // grid position `correctIndex` shows the slice starting at that column /
+    // row of the image. background-position is expressed as a percentage of the
+    // *overflowing* image, hence col * 100 / cols (not cols - 1): for a 3x3
+    // grid the correct positions are 0%, 33.3% and 66.7%.
+    const col = correctIndex % size.cols;
+    const row = Math.floor(correctIndex / size.cols);
+    const x = col * (100 / size.cols);
+    const y = row * (100 / size.rows);
 
     const piece = document.createElement('button');
     piece.className = 'puzzle-piece';
-    piece.dataset.index = index;
-    piece.dataset.correctIndex = index;
+    piece.dataset.correctIndex = String(correctIndex);
     piece.style.cssText = `
-        width: ${pieceSize}%;
+        width: ${100 / size.cols}%;
         aspect-ratio: 1;
         background-image: url('${imgSrc}');
         background-size: ${size.cols * 100}% ${size.rows * 100}%;
@@ -50,7 +49,7 @@ function createPuzzlePiece(index, totalPieces, size, imgSrc) {
         cursor: pointer;
         touch-action: none;
     `;
-    piece.setAttribute('aria-label', `Puzzle piece ${index + 1} of ${totalPieces}`);
+    piece.setAttribute('aria-label', `Puzzle piece ${correctIndex + 1} of ${totalPieces}`);
     return piece;
 }
 
@@ -95,9 +94,8 @@ function updateMoves() {
 }
 
 function checkWin() {
-    return puzzleState.pieces.every((piece, index) => 
-        parseInt(piece.dataset.index) === parseInt(piece.dataset.correctIndex)
-    );
+    // Win when every piece is back in the grid position it belongs at.
+    return puzzleState.pieces.every((piece) => piece.dataset.displayIndex === piece.dataset.correctIndex);
 }
 
 function onPuzzleComplete() {
@@ -106,7 +104,7 @@ function onPuzzleComplete() {
     const elapsed = Math.floor((Date.now() - puzzleState.startTime) / 1000);
     const mins = Math.floor(elapsed / 60);
     const secs = elapsed % 60;
-    
+
     setTimeout(() => {
         alert(`🎉 Puzzle Complete!\n\nTime: ${mins}:${secs.toString().padStart(2, '0')}\nMoves: ${puzzleState.moves}\n\nTelkom keeps you connected — even offline!`);
         closePuzzle();
@@ -114,25 +112,28 @@ function onPuzzleComplete() {
 }
 
 function swapPieces(piece1, piece2) {
+    // Swap the two pieces' grid positions: physically exchange them in the DOM
+    // (so each moves to the other's cell) and exchange their displayIndex
+    // values, which track current position. correctIndex travels with the
+    // piece and is what decides the image slice each cell shows, so the win
+    // condition is displayIndex === correctIndex for every piece.
     const parent = piece1.parentNode;
     const index1 = Array.from(parent.children).indexOf(piece1);
     const index2 = Array.from(parent.children).indexOf(piece2);
-    
-    // Swap in DOM
+
     if (index1 < index2) {
         parent.insertBefore(piece2, piece1);
     } else {
         parent.insertBefore(piece1, piece2);
     }
-    
-    // Update data attributes
-    const temp = piece1.dataset.index;
-    piece1.dataset.index = piece2.dataset.index;
-    piece2.dataset.index = temp;
-    
+
+    const temp = piece1.dataset.displayIndex;
+    piece1.dataset.displayIndex = piece2.dataset.displayIndex;
+    piece2.dataset.displayIndex = temp;
+
     puzzleState.moves++;
     updateMoves();
-    
+
     if (checkWin()) {
         onPuzzleComplete();
     }
@@ -167,21 +168,29 @@ function createPuzzleGrid(size, imgSrc) {
         aspect-ratio: 1;
         margin: 0 auto;
     `;
-    
+
     const totalPieces = size.rows * size.cols;
+    // `indices[i]` is the correctIndex of the piece that starts at display
+    // position i. A solved puzzle (indices[i] === i for every i) is a
+    // zero-move puzzle, so keep shuffling until at least 70% of pieces are
+    // out of place — a puzzle that is already solved or nearly solved is a
+    // bad first impression.
     let indices = shuffleArray(Array.from({ length: totalPieces }, (_, i) => i));
-    
-    // Ensure puzzle is not already solved (0 moves needed) or nearly solved
-    // Count how many pieces are already in correct position
     let correctPositions = indices.filter((correctIndex, displayIndex) => correctIndex === displayIndex).length;
-    while (correctPositions > totalPieces * 0.3) { // No more than 30% in correct place
+    let guard = 0;
+    while (correctPositions > totalPieces * 0.3 && guard < 100) {
         indices = shuffleArray(Array.from({ length: totalPieces }, (_, i) => i));
         correctPositions = indices.filter((correctIndex, displayIndex) => correctIndex === displayIndex).length;
+        guard++;
     }
-    
+
     puzzleState.pieces = indices.map((correctIndex, displayIndex) => {
-        const piece = createPuzzlePiece(displayIndex, totalPieces, size, imgSrc);
-        piece.dataset.correctIndex = correctIndex;
+        const piece = createPuzzlePiece(correctIndex, totalPieces, size, imgSrc);
+        // `displayIndex` is where this piece sits in the grid right now;
+        // `correctIndex` is where it belongs. A swap exchanges displayIndex
+        // between two pieces — the image slice each shows travels with its
+        // correctIndex, so the win condition is displayIndex === correctIndex.
+        piece.dataset.displayIndex = String(displayIndex);
         piece.addEventListener('click', () => onPieceClick(piece));
         // Touch support
         piece.addEventListener('touchstart', (e) => {
@@ -191,12 +200,16 @@ function createPuzzleGrid(size, imgSrc) {
         grid.appendChild(piece);
         return piece;
     });
-    
+
     return grid;
 }
 
 function closePuzzle() {
     stopTimer();
+    if (puzzleState.keyHandler) {
+        document.removeEventListener('keydown', puzzleState.keyHandler);
+        puzzleState.keyHandler = null;
+    }
     if (puzzleState.overlay) {
         puzzleState.overlay.remove();
         puzzleState.overlay = null;
@@ -368,14 +381,33 @@ function openTelkomPuzzle(waypointId, onClose = null) {
         if (e.target === overlay) closePuzzle();
     });
 
-    // Close on Escape key
-    const handleEscape = (e) => {
-        if (e.key === 'Escape') {
+    // Keyboard support: two pieces can be selected with Tab/Shift+Tab and
+    // swapped with Enter/Space, so the puzzle is playable without a mouse or
+    // a touchscreen. Escape closes the overlay — handled by the same handler
+    // so it is removed when the puzzle closes (no leak across sessions).
+    const focusablePieces = puzzleState.pieces;
+    let focusIndex = 0;
+    function focusPiece(index) {
+        focusIndex = (index + focusablePieces.length) % focusablePieces.length;
+        focusablePieces[focusIndex].focus();
+    }
+    function handlePuzzleKeydown(e) {
+        if (e.key === 'Tab' && !e.shiftKey) {
+            e.preventDefault();
+            focusPiece(focusIndex + 1);
+        } else if (e.key === 'Tab' && e.shiftKey) {
+            e.preventDefault();
+            focusPiece(focusIndex - 1);
+        } else if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onPieceClick(focusablePieces[focusIndex]);
+        } else if (e.key === 'Escape') {
             closePuzzle();
-            document.removeEventListener('keydown', handleEscape);
         }
-    };
-    document.addEventListener('keydown', handleEscape);
+    }
+    puzzleState.keyHandler = handlePuzzleKeydown;
+    document.addEventListener('keydown', handlePuzzleKeydown);
+    focusPiece(0);
 
     startTimer();
 }
