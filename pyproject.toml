@@ -26,6 +26,7 @@ select = [
 ignore = [
     "E501",  # line too long (handled by line-length)
     "I001",  # import block sorting (handled by isort)
+    "UP042", # str+Enum for Python 3.10 compatibility
 ]
 fixable = ["ALL"]
 unfixable = ["BLE001", "TID251"]
