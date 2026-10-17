@@ -15,11 +15,11 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import Enum
 from typing import Any, TypedDict
 
 
-class AlertSeverity(StrEnum):
+class AlertSeverity(str, Enum):
     """Severity levels for railway alerts."""
 
     INFO = "info"  # Planned works, minor notices
@@ -27,7 +27,7 @@ class AlertSeverity(StrEnum):
     CRITICAL = "critical"  # Cancellations, line blockages, rail moved
 
 
-class AlertCategory(StrEnum):
+class AlertCategory(str, Enum):
     """Categories of railway alerts."""
 
     DELAY = "delay"
