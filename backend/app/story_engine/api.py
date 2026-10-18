@@ -1144,7 +1144,18 @@ def journey_passport(journey_id: str) -> PassportResponse:
     """
     if not is_valid_journey_id(journey_id):
         raise HTTPException(status_code=422, detail="journey_id must be UUID-shaped")
-    return PassportResponse(**build_passport(journey_id))
+    passport = build_passport(journey_id)
+    return PassportResponse(
+        journey_id=passport["journey_id"],
+        issued_at=passport["issued_at"],
+        stamps=[PassportStamp(**s) for s in passport["stamps"]],
+        stamps_earned=passport["stamps_earned"],
+        stamps_total=passport["stamps_total"],
+        completion=passport["completion"],
+        provinces_visited=passport["provinces_visited"],
+        complete=passport["complete"],
+        coverage_note=passport["coverage_note"],
+    )
 
 
 # ---------------------------------------------------------------------

@@ -85,7 +85,7 @@ class Stamp:
     source: str
     ordinal: int
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> PassportStampDict:
         return {
             "waypoint_id": self.waypoint_id,
             "name": self.name,
@@ -172,10 +172,11 @@ def build_passport(journey_id: str, now: float | None = None) -> PassportDict:
                 "Every station up to the last stamped one is backed by a corridor position report."
             )
 
+    stamps_list: list[PassportStampDict] = [s.as_dict() for s in stamps]
     return {
         "journey_id": journey_id,
         "issued_at": now,
-        "stamps": [s.as_dict() for s in stamps],
+        "stamps": stamps_list,
         "stamps_earned": len(stamps),
         "stamps_total": total,
         "completion": round(len(stamps) / total, 3) if total else 0.0,
@@ -185,7 +186,7 @@ def build_passport(journey_id: str, now: float | None = None) -> PassportDict:
     }
 
 
-def stamp_for_waypoint(journey_id: str, waypoint_id: str) -> dict[str, object] | None:
+def stamp_for_waypoint(journey_id: str, waypoint_id: str) -> PassportStampDict | None:
     """The passport's stamp for one station, or None if not reached."""
     passport_data = build_passport(journey_id)
     for stamp in passport_data["stamps"]:
