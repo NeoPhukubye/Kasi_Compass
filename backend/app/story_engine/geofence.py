@@ -112,4 +112,7 @@ def route_progress_fraction(current_lat: float, current_lon: float) -> float:
     """
     nearest = nearest_waypoint(current_lat, current_lon)
     idx = PRETORIA_TO_CAPE_TOWN.index(nearest)
-    return idx / (len(PRETORIA_TO_CAPE_TOWN) - 1)
+    denominator = len(PRETORIA_TO_CAPE_TOWN) - 1
+    if denominator == 0:
+        return 0.0
+    return idx / denominator
