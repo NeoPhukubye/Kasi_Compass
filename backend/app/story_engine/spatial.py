@@ -242,6 +242,18 @@ class SpatialStore:
                 logging.getLogger(__name__).warning(
                     "PostGIS connection failed, falling back to SQLite: %s", exc
                 )
+            except RuntimeError as exc:
+                # _connect_postgis raises RuntimeError when psycopg is not
+                # installed but DATABASE_URL is set. Without this branch the
+                # app hard-crashes at startup instead of degrading to SQLite —
+                # the documented no-infrastructure default.
+                self._conn = None
+                self._dsn = None
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "PostGIS unavailable, falling back to SQLite: %s", exc
+                )
         if self._conn is None:
             self._conn = self._connect_sqlite(self._sqlite_path)
             self._driver = "sqlite"
