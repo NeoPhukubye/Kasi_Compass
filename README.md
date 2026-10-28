@@ -4,7 +4,7 @@
 
 An interactive, animated digital companion for South Africa's most storied rail journey — Pretoria to Cape Town — built for Geekulcha's **Train Journey Mapper** challenge (Geekulcha Annual Hackathon 2026, #GKHack26 #BuildForUse).
 
-*Team NeoDev — selected 6 September 2026, physical track, BCX HQs Centurion, 25–27 September 2026.*
+**Solo author: Neo Phukubye** (`nephujhb025@student.wethinkcode.co.za`) — selected 6 September 2026, physical track, BCX HQs Centurion, 25–27 September 2026.
 
 ---
 
@@ -191,15 +191,16 @@ Full task-level detail, owners, and dates: see `planning/Kasi_Compass_WBS.xlsx`.
 
 ## 9. Team Composition
 
-*(Fill in with actual team members -- this is a scored judging criterion.)*
+**Solo author — Neo Phukubye** built the entire project alone: backend, geospatial
+layer, content pipeline, and frontend. Contact: `nephujhb025@student.wethinkcode.co.za`.
 
 | Role | Name | Background |
 |---|---|---|
-| Backend / Geospatial Engineer | -- | -- |
-| Frontend / Map Animation Developer | -- | -- |
-| Content & Localization Lead | -- | -- |
-| UX & Cultural Content Lead | -- | -- |
-| Partnerships / Go-to-Market Lead | -- | -- |
+| Backend / Geospatial Engineer | Neo Phukubye | FastAPI, PostGIS/SQLite spatial layer, route & geofence engine |
+| Frontend / Map Animation Developer | Neo Phukubye | MapLibre GL JS, service worker, offline caching |
+| Content & Localization Lead | Neo Phukubye | Human-sourced content store, Gemini-assisted translation tooling |
+| UX & Cultural Content Lead | Neo Phukubye | Elderly-first accessibility, era reconstruction, Memory Vault |
+| Partnerships / Go-to-Market Lead | Neo Phukubye | Operator, tourism-board, and PRASA-aligned phasing plan |
 
 ---
 
